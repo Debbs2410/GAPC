@@ -8,9 +8,9 @@ def registrar_usuario():
     nombre = st.text_input("Nombre completo")
     correo = st.text_input("Correo electrónico")
     contrasena = st.text_input("Contraseña", type="password")
-    rol = st.selectbox("Rol", ["Beneficiario", "Directiva", "Promotora","Administradora"])
+    rol = st.selectbox("Rol", ["Beneficiario", "Directiva", "Promotora", "Administradora"])
     id_distrito = st.number_input("Distrito", min_value=1, max_value=7, step=1)
-    id_grupo= st.number_input("Grupo", min_value=1, step=1)
+    id_grupo = st.number_input("Grupo", min_value=1, step=1)
 
     if st.button("Registrar"):
         if not nombre or not correo or not contrasena:
@@ -21,18 +21,23 @@ def registrar_usuario():
         if conexion:
             cursor = conexion.cursor(dictionary=True)
 
-            # Verificar si el grupo ya tiene 50 miembros (solo para beneficiarios)
-            if rol == "beneficiario":
+            # ✅ Verificar límite de beneficiarios
+            if rol.lower() == "beneficiario":
                 cursor.execute("SELECT COUNT(*) AS total FROM usuarios WHERE id_grupo = %s", (id_grupo,))
                 total = cursor.fetchone()["total"]
                 if total >= 50:
                     st.error("Este grupo ya tiene el máximo de 50 beneficiarios.")
+                    conexion.close()
                     return
 
+            # Encriptar contraseña
             contrasena_hash = hashlib.sha256(contrasena.encode()).hexdigest()
 
-            sql = """INSERT INTO usuarios (nombre, correo, contrasena, rol, id_distrito, id_grupo)
-                     VALUES (%s, %s, %s, %s, %s, %s)"""
+            # Insertar usuario
+            sql = """
+            INSERT INTO usuarios (nombre, correo, contrasena, rol, id_distrito, id_grupo)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """
             cursor.execute(sql, (nombre, correo, contrasena_hash, rol, id_distrito, id_grupo))
             conexion.commit()
             conexion.close()
