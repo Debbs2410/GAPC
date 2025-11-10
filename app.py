@@ -1,6 +1,19 @@
-# app.py
 import streamlit as st
-from modulos.login import login  # Importamos la función mostrar_venta del módulo venta
+from modulos.login import login
+from modulos.registro import registrar_usuario
+from modulos.panel import panel
 
-# Llamamos a la función mostrar_venta para mostrar el mensaje en la app
-login()
+st.set_page_config(page_title="Cooperativa", layout="centered")
+
+if "sesion_iniciada" not in st.session_state:
+    st.session_state["sesion_iniciada"] = False
+
+menu = st.sidebar.selectbox("Menú", ["Iniciar sesión", "Registrar usuario"])
+
+if not st.session_state["sesion_iniciada"]:
+    if menu == "Iniciar sesión":
+        login()
+    else:
+        registrar_usuario()
+else:
+    panel()
