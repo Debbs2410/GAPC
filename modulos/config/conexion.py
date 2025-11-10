@@ -1,21 +1,15 @@
 import mysql.connector
-from mysql.connector import Error
+import streamlit as st
 
 def obtener_conexion():
     try:
         conexion = mysql.connector.connect(
-            host='bnsf0ymzpvkirhrcgqov-mysql.services.clever-cloud.com',
-            user='uz0ilcx1uwofz9ys',
-            password='Q8EPNcwHwEh7PScgYUkT',
-            database='bnsf0ymzpvkirhrcgqov',
-            port=3306
+            host="localhost",
+            user="root",
+            password="",   # tu contraseña de MySQL
+            database="cooperativa_db"
         )
-        if conexion.is_connected():
-            print("✅ Conexión establecida")
-            return conexion
-        else:
-            print("❌ Conexión fallida (is_connected = False)")
-            return None
+        return conexion
     except mysql.connector.Error as e:
-        print(f"❌ Error al conectar: {e}")
+        st.error(f"Error de conexión: {e}")
         return None
