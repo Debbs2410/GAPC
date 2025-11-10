@@ -9,8 +9,8 @@ def registrar_usuario():
     correo = st.text_input("Correo electrónico")
     contrasena = st.text_input("Contraseña", type="password")
     rol = st.selectbox("Rol", ["Beneficiario", "Directiva", "Promotora","Administradora"])
-    Distrito = st.number_input("ID del distrito", min_value=1, step=1)
-    Grupo = st.number_input("ID del grupo", min_value=1, step=1)
+    Id_distrito = st.number_input("Distrito", min_value=1, max_value=7 step=1)
+    Id_grupo= st.number_input("Grupo", min_value=1, step=1)
 
     if st.button("Registrar"):
         if not nombre or not correo or not contrasena:
