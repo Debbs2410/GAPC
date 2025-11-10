@@ -1,43 +1,27 @@
 import streamlit as st
 from modulos.config.conexion import obtener_conexion
-
-
-def verificar_usuario(usuario, contrasena):
-    con = obtener_conexion()
-    if not con:
-        st.error("⚠️ No se pudo conectar a la base de datos.")
-        return None
-    else:
-        # ✅ Guardar en el estado que la conexión fue exitosa
-        st.session_state["conexion_exitosa"] = True
-
-    try:
-        cursor = con.cursor()
-        query = "SELECT Tipo_usuario FROM USUARIO WHERE usuario = %s AND contrasena = %s"
-        cursor.execute(query, (usuario, contrasena))
-        result = cursor.fetchone()
-        return result[0] if result else None
-    finally:
-        con.close()
-
+import hashlib
 
 def login():
-    st.title("Inicio de sesión")
+    st.subheader("Inicio de sesión")
 
-    # 🟢 Mostrar mensaje persistente si ya hubo conexión exitosa
-    if st.session_state.get("conexion_exitosa"):
-        st.success("✅ Conexión a la base de datos establecida correctamente.")
-
-    usuario = st.text_input("Usuario", key="usuario_input")
-    contrasena = st.text_input("Contraseña", type="password", key="contrasena_input")
+    correo = st.text_input("Correo electrónico")
+    contrasena = st.text_input("Contraseña", type="password")
 
     if st.button("Iniciar sesión"):
-        tipo = verificar_usuario(usuario, contrasena)
-        if tipo:
-            st.session_state["usuario"] = usuario
-            st.session_state["tipo_usuario"] = tipo
-            st.success(f"Bienvenido ({tipo}) 👋")
-            st.session_state["sesion_iniciada"] = True
-            st.rerun()
-        else:
-            st.error("❌ Credenciales incorrectas.")
+        conexion = obtener_conexion()
+        if conexion:
+            cursor = conexion.cursor(dictionary=True)
+            contrasena_hash = hashlib.sha256(contrasena.encode()).hexdigest()
+
+            cursor.execute("SELECT * FROM usuarios WHERE correo=%s AND contrasena=%s", (correo, contrasena_hash))
+            usuario = cursor.fetchone()
+
+            if usuario:
+                st.session_state["usuario"] = usuario
+                st.session_state["sesion_iniciada"] = True
+                st.success(f"Bienvenido, {usuario['nombre']} ({usuario['rol']})")
+                st.experimental_rerun()
+            else:
+                st.error("Correo o contraseña incorrectos.")
+
