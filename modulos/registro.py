@@ -23,7 +23,7 @@ def registrar_usuario():
 
             # ✅ Verificar límite de beneficiarios
             if rol.lower() == "beneficiario":
-                cursor.execute("SELECT COUNT(*) AS total FROM usuarios WHERE id_grupo = %s", (id_grupo,))
+                cursor.execute("SELECT COUNT(*) AS total FROM Usuarios WHERE id_grupo = %s", (id_grupo,))
                 total = cursor.fetchone()["total"]
                 if total >= 50:
                     st.error("Este grupo ya tiene el máximo de 50 beneficiarios.")
