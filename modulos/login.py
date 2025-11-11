@@ -5,11 +5,11 @@ import hashlib
 def login():
     st.title("🔐 Inicio de Sesión - Cooperativa GAPC")
 
-    Correo = st.text_input("Correo electrónico")
-    Contraseña = st.text_input("Contraseña", type="password")
+    correo = st.text_input("Correo electrónico")
+    contrasena = st.text_input("Contraseña", type="password")
 
     if st.button("Iniciar sesión"):
-        if not Correo or not Contraseña:
+        if not correo or not contrasena:
             st.warning("Completa todos los campos.")
             return
 
@@ -21,19 +21,22 @@ def login():
         cursor = conexion.cursor(dictionary=True)
         contrasena_hash = hashlib.sha256(contrasena.encode()).hexdigest()
 
+        # 👇 Ajusta los nombres de columnas según tu tabla
         cursor.execute(
-            "SELECT * FROM Usuarios WHERE correo = %s AND contrasena = %s",
+            "SELECT * FROM Usuarios WHERE Correo = %s AND Contrasena = %s",
             (correo, contrasena_hash)
         )
+
         usuario = cursor.fetchone()
         conexion.close()
 
         if usuario:
             st.session_state["usuario"] = usuario
-            st.success(f"Bienvenido/a, {usuario['nombre']}")
+            st.success(f"Bienvenido/a, {usuario['Nombre']}")
             st.session_state["autenticado"] = True
             st.experimental_rerun()
         else:
             st.error("Credenciales incorrectas.")
+
 
 
