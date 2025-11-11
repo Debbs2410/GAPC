@@ -23,7 +23,7 @@ def login():
 
         # 👇 Ajusta los nombres de columnas según tu tabla
         cursor.execute(
-            "SELECT * FROM Usuarios WHERE Correo = %s AND Contrasena = %s",
+            "SELECT * FROM Usuarios WHERE Correo = %s AND Contraseña = %s",
             (correo, contrasena_hash)
         )
 
