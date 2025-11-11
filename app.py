@@ -1,19 +1,13 @@
 import streamlit as st
 from modulos.login import login
-from modulos.registro import registrar_usuario
-from modulos.panel import panel
+from modulos.panel import mostrar_panel
 
-st.set_page_config(page_title="Cooperativa", layout="centered")
+st.set_page_config(page_title="Cooperativa GAPC", layout="wide")
 
-if "sesion_iniciada" not in st.session_state:
-    st.session_state["sesion_iniciada"] = False
+if "autenticado" not in st.session_state:
+    st.session_state["autenticado"] = False
 
-menu = st.sidebar.selectbox("Menú", ["Iniciar sesión", "Registrar usuario"])
-
-if not st.session_state["sesion_iniciada"]:
-    if menu == "Iniciar sesión":
-        login()
-    else:
-        registrar_usuario()
+if not st.session_state["autenticado"]:
+    login()
 else:
-    panel()
+    mostrar_panel()
