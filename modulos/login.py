@@ -5,11 +5,11 @@ import hashlib
 def login():
     st.title("🔐 Inicio de Sesión - Cooperativa GAPC")
 
-    correo = st.text_input("Correo electrónico")
-    contrasena = st.text_input("Contraseña", type="password")
+    Correo = st.text_input("Correo electrónico")
+    Contraseña = st.text_input("Contraseña", type="password")
 
     if st.button("Iniciar sesión"):
-        if not correo or not contrasena:
+        if not Correo or not Contraseña:
             st.warning("Completa todos los campos.")
             return
 
