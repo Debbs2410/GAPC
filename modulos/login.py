@@ -22,7 +22,7 @@ def login():
         contrasena_hash = hashlib.sha256(contrasena.encode()).hexdigest()
 
         cursor.execute(
-            "SELECT * FROM usuarios WHERE correo = %s AND contrasena = %s",
+            "SELECT * FROM Usuarios WHERE correo = %s AND contrasena = %s",
             (correo, contrasena_hash)
         )
         usuario = cursor.fetchone()
