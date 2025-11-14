@@ -19,9 +19,10 @@ def login():
             return
 
         cursor = conexion.cursor(dictionary=True)
+        # La clave de tu error era la mayúscula y la tilde, que ya corregiste en el SQL
         contrasena_hash = hashlib.sha256(contrasena.encode()).hexdigest()
 
-        # 👇 Ajusta los nombres de columnas según tu tabla
+        # Usando 'Usuarios', 'Correo', y 'Contraseña' tal como están en tu código
         cursor.execute(
             "SELECT * FROM Usuarios WHERE Correo = %s AND Contraseña = %s",
             (correo, contrasena_hash)
@@ -32,11 +33,11 @@ def login():
 
         if usuario:
             st.session_state["usuario"] = usuario
-            st.success(f"Bienvenido/a, {usuario['Nombre']}")
+            
+            # 👇 LÍNEA CORREGIDA: Se cambió 'Nombre' por 'Nombre_Usuario'
+            st.success(f"Bienvenido/a, {usuario['Nombre_Usuario']}") 
+            
             st.session_state["autenticado"] = True
             st.experimental_rerun()
         else:
             st.error("Credenciales incorrectas.")
-
-
-
