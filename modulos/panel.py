@@ -1,5 +1,5 @@
 import streamlit as st
-from modulos.registro_beneficiarios import registrar_beneficiario
+from modulos.registro_beneficiarios import registrar_beneficiario, ver_todos_miembros, crear_miembro
 from modulos.registro_usuarios import registrar_usuario
 
 def mostrar_panel():
@@ -23,14 +23,19 @@ def mostrar_panel():
 
         opcion = st.sidebar.radio(
             "Selecciona una acción:",
-            ["Registrar usuario", "Ver reportes", "Configuraciones"],
+            ["Registrar usuario", "Gestionar Miembros", "Ver reportes", "Configuraciones"],
         )
 
         if opcion == "Registrar usuario":
             registrar_usuario()
+        elif opcion == "Gestionar Miembros":
+            tab1, tab2 = st.tabs(["👥 Ver Todos los Miembros", "➕ Crear Nuevo Miembro"])
+            with tab1:
+                ver_todos_miembros()
+            with tab2:
+                crear_miembro()
         elif opcion == "Ver reportes":
             st.info("📊 Módulo de reportes en desarrollo...")
-            # Aquí puedes añadir show_all_users() u otras funciones
         elif opcion == "Configuraciones":
             st.info("⚙️ Opciones de configuración del sistema próximamente...")
 
