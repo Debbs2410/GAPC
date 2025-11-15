@@ -9,11 +9,11 @@ def mostrar_panel():
         return
 
     usuario = st.session_state["usuario"]
-    rol = usuario.get("rol")
+    rol = usuario.get("rol") or usuario.get("Rol")
 
     # --- Menú lateral ---
     st.sidebar.title("📋 Menú de navegación")
-    st.sidebar.write(f"👤 {usuario.get('nombre', 'Sin nombre')} ({rol})")
+    st.sidebar.write(f"👤 {usuario.get('Nombre_Usuario', usuario.get('nombre', 'Sin nombre'))} ({rol})")
 
     # --- ADMINISTRADORA ---
     if rol == "Administradora":
@@ -37,14 +37,17 @@ def mostrar_panel():
     # --- PROMOTORA ---
     elif rol == "Promotora":
         st.title("Panel de Promotora")
-        st.sidebar.success(f"✅ Acceso al distrito {usuario.get('id_distrito')}")
-        st.write(f"Puedes gestionar los grupos del distrito {usuario.get('id_distrito')}.")
+        id_distrito = usuario.get('id_distrito') or usuario.get('ID_Distrito')
+        st.sidebar.success(f"✅ Acceso al distrito {id_distrito}")
+        st.write(f"Puedes gestionar los grupos del distrito {id_distrito}.")
 
     # --- DIRECTIVA ---
     elif rol == "Directiva":
         st.title("Panel de Directiva")
-        st.sidebar.success(f"✅ Grupo {usuario.get('id_grupo')} del distrito {usuario.get('id_distrito')}")
-        registrar_beneficiario(usuario.get("id_grupo"))
+        id_grupo = usuario.get('id_grupo') or usuario.get('ID_Grupo')
+        id_distrito = usuario.get('id_distrito') or usuario.get('ID_Distrito')
+        st.sidebar.success(f"✅ Grupo {id_grupo} del distrito {id_distrito}")
+        registrar_beneficiario(id_grupo)
 
     else:
         st.error("❌ Rol no reconocido.")
