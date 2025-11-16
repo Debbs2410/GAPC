@@ -1,16 +1,7 @@
-# --- CÓDIGO FINAL PARA app.py ---
-
 import streamlit as st
-
 from modulos.panel import mostrar_panel
-
-
-# Función de login simulada (si la usas directamente aquí)
 def login():
-  
     pass
-
-
 # Lógica de flujo de la aplicación
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
