@@ -1,9 +1,9 @@
 def mostrar_panel():
     import streamlit as st
     
-    # 🚨 LÍNEAS CORREGIDAS: Usamos la ruta absoluta 'modulos.archivo'
-    from modulos.registro_beneficiarios import registrar_beneficiario, ver_todos_miembros, crear_miembro
-    from modulos.registro_usuarios import registrar_usuario
+    # 🚨 LÍNEAS CORREGIDAS: Usamos la importación relativa (el punto .)
+    from .registro_beneficiarios import registrar_beneficiario, ver_todos_miembros, crear_miembro
+    from .registro_usuarios import registrar_usuario
     
     # --- VALIDACIÓN ROBUSTA DE SESIÓN ---
     if "usuario" not in st.session_state or st.session_state["usuario"] is None:
