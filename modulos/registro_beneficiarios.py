@@ -3,7 +3,7 @@ from modulos.config.conexion import obtener_conexion
 import hashlib
 import pandas as pd
 def ver_todos_miembros():
-    """Vista para que la Administradora vea todos los miembros de todos los distritos."""
+    """Vista para que la Administradora vea todos los miembros del sistema."""
     
     import streamlit as st
     from modulos.config.conexion import obtener_conexion
@@ -19,9 +19,9 @@ def ver_todos_miembros():
     cursor = conexion.cursor(dictionary=True)
     
     try:
-        # Obtener todos los miembros con información del grupo y distrito
+        # La consulta SQL permanece igual
         cursor.execute("""
-            SELECT m.id, m.nombre, m.sexo, m.Dui, m.Numero_Telefono, m.Direccion, -- COLUMNA CORREGIDA
+            SELECT m.id, m.nombre, m.sexo, m.Dui, m.Numero_Telefono, m.Direccion,
                    m.grupo_id, m.distrito_id, m.creado_en,
                    g.Nombre AS nombre_grupo, d.Nombre AS nombre_distrito
             FROM Miembros m
@@ -35,15 +35,14 @@ def ver_todos_miembros():
         if not miembros:
             st.info("📭 No hay miembros registrados aún.")
         else:
-            # Convertir a DataFrame para mejor presentación
             df = pd.DataFrame(miembros)
             
-            # Renombrar columnas para mejor legibilidad
+            # 1. Renombrar columnas para mejor legibilidad y estilo
             df = df.rename(columns={
                 'id': 'ID',
                 'nombre': 'Nombre',
                 'sexo': 'Sexo',
-                'Dui': 'Dui',                           # CORREGIDO
+                'Dui': 'Dui',                          
                 'Numero_Telefono': 'Teléfono',          
                 'Direccion': 'Dirección',               
                 'grupo_id': 'Grupo ID',
@@ -53,8 +52,27 @@ def ver_todos_miembros():
                 'creado_en': 'Fecha Creación'
             })
             
-            # Mostrar tabla interactiva
-            st.dataframe(df, use_container_width=True)
+            # 2. DEFINIR EL NUEVO ORDEN DE COLUMNAS
+            columnas_ordenadas = [
+                'ID',
+                'Grupo ID',      # Nuevo orden
+                'Distrito ID',   # Nuevo orden
+                'Nombre',
+                'Sexo',
+                'Dui',
+                'Teléfono',
+                'Dirección',
+                'Nombre Grupo',
+                'Nombre Distrito',
+                'Fecha Creación' 
+            ]
+            
+            # Aplicar el nuevo orden
+            df = df[columnas_ordenadas]
+
+            # 3. Mostrar tabla interactiva (quitando el índice de Pandas)
+            # 👇 CAMBIO CLAVE: index=False para ocultar la columna '0'
+            st.dataframe(df, use_container_width=True, hide_index=True)
             
             # Estadísticas
             col1, col2, col3 = st.columns(3)
@@ -67,7 +85,6 @@ def ver_todos_miembros():
     
     finally:
         conexion.close()
-
 
 def crear_miembro():
     """Formulario para que la Administradora cree nuevos miembros."""
