@@ -1,10 +1,11 @@
 def mostrar_panel():
     import streamlit as st
     
-    # --- CORRECCIÓN DE IMPORTACIÓN ---
-    # Usamos el punto (.) para importar desde el directorio actual (modulos/)
-    from .registro_beneficiarios import registrar_beneficiario, ver_todos_miembros, crear_miembro
-    from modulos.registro_usuarios import registrar_usuario # Asumo que este también es un import relativo
+    # --- CORRECCIÓN DE IMPORTACIÓN: Usamos el nombre del archivo directamente ---
+    # Esto asume que Python puede encontrar 'registro_beneficiarios' y 'registro_usuarios'
+    # en la misma ruta de búsqueda (dentro de la carpeta 'modulos').
+    import registro_beneficiarios
+    import registro_usuarios
     
     # --- VALIDACIÓN ROBUSTA DE SESIÓN ---
     if "usuario" not in st.session_state or st.session_state["usuario"] is None:
@@ -36,14 +37,14 @@ def mostrar_panel():
         )
 
         if opcion == "Registrar usuario":
-            registrar_usuario()
+            registro_usuarios.registrar_usuario()
         
         elif opcion == "Gestionar Miembros":
             tab1, tab2 = st.tabs(["👥 Ver Todos los Miembros", "➕ Crear Nuevo Miembro"])
             with tab1:
-                ver_todos_miembros()
+                registro_beneficiarios.ver_todos_miembros()
             with tab2:
-                crear_miembro()
+                registro_beneficiarios.crear_miembro()
         
         elif opcion == "Grupo":
             st.info("📦 Módulo de Grupos.")
@@ -71,7 +72,7 @@ def mostrar_panel():
         id_grupo = usuario.get('id_grupo') or usuario.get('ID_Grupo')
         # Referencia a id_distrito eliminada
         st.sidebar.success(f"✅ Grupo {id_grupo}")
-        registrar_beneficiario(id_grupo)
+        registro_beneficiarios.registrar_beneficiario(id_grupo)
 
     else:
         st.error("❌ Rol no reconocido. Contacta al administrador.")
