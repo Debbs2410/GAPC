@@ -1,6 +1,6 @@
 import streamlit as st
 from modulos.config.conexion import obtener_conexion
-import hashlib
+# import hashlib  <-- YA NO ES NECESARIA ESTA LIBRERÍA
 
 def login():
     st.title("🔐 Inicio de Sesión - Cooperativa GAPC")
@@ -19,28 +19,19 @@ def login():
             return
 
         cursor = conexion.cursor(dictionary=True)
-        contrasena_hash = hashlib.sha256(contrasena.encode()).hexdigest()
-
+        contrasena_plana = contrasena
+        
         # Usando 'Usuarios', 'Correo', y 'Contraseña'
-        cursor.execute(
-            "SELECT * FROM Usuarios WHERE Correo = %s AND Contraseña = %s",
-            (correo, contrasena_hash)
-        )
+        cursor.execute("SELECT * FROM Usuarios WHERE Correo = %s AND Contraseña = %s",  )
 
         usuario = cursor.fetchone()
         conexion.close()
 
         if usuario:
             st.session_state["usuario"] = usuario
-            
-          
             st.success(f"Bienvenido/a, {usuario['Nombre_Usuario']}") 
-            
             st.session_state["autenticado"] = True
-            
-
-            st.rerun() 
-            
+            st.rerun()  
         else:
             st.error("Credenciales incorrectas.")
        
