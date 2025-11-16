@@ -1,58 +1,44 @@
-import streamlit as st
-from modulos.registro_beneficiarios import registrar_beneficiario, ver_todos_miembros, crear_miembro
-from modulos.registro_usuarios import registrar_usuario
-
 def mostrar_panel():
-    # Aseguramos que haya un usuario en session_state
-    if "usuario" not in st.session_state:
-        st.error("No hay usuario en sesión. Por favor inicia sesión.")
-        return
-
+    # ... (código previo) ...
+    
     usuario = st.session_state["usuario"]
-    rol = usuario.get("rol") or usuario.get("Rol")
+    # 1. Obtenemos el rol y lo convertimos a minúsculas y limpiamos espacios
+    rol_raw = usuario.get("rol") or usuario.get("Rol")
+    
+    # 2. Convertimos a minúsculas y quitamos espacios para asegurar la comparación
+    if rol_raw:
+        rol_limpio = rol_raw.strip().lower()
+    else:
+        rol_limpio = "" # Si no hay rol, queda vacío
 
-    # --- Menú lateral ---
+    # Mostramos el nombre de usuario y el rol limpio en el sidebar
     st.sidebar.title("📋 Menú de navegación")
-    st.sidebar.write(f"👤 {usuario.get('Nombre_Usuario', usuario.get('nombre', 'Sin nombre'))} ({rol})")
-
+    st.sidebar.write(f"👤 {usuario.get('Nombre_Usuario', usuario.get('nombre', 'Sin nombre'))} ({rol_raw})")
+    
     # --- ADMINISTRADORA ---
-    if rol == "Administradora":
+    # 3. Comparamos con la cadena en minúsculas y sin espacios
+    if rol_limpio == "administradora":
         st.title("Panel de Administradora")
         st.sidebar.success("✅ Control total del sistema.")
         st.write("Acceso completo a todos los distritos y grupos.")
 
-        opcion = st.selectbox(
+        opcion = st.sidebar.radio(
             "Selecciona una acción:",
+            # Las opciones de Ciclos y Caja SÍ ESTÁN INCLUIDAS AQUÍ
             ["Registrar usuario", "Gestionar Miembros", "Ver reportes", "Configuraciones", "Grupo", "Ciclos", "Caja"],
         )
 
-        if opcion == "Registrar usuario":
-            registrar_usuario()
-        elif opcion == "Gestionar Miembros":
-            tab1, tab2 = st.tabs(["👥 Ver Todos los Miembros", "➕ Crear Nuevo Miembro"])
-            with tab1:
-                ver_todos_miembros()
-            with tab2:
-                crear_miembro()
-        elif opcion == "Ver reportes":
-            st.info("📊 Módulo de reportes en desarrollo...")
-        elif opcion == "Configuraciones":
-            st.info("⚙️ Opciones de configuración del sistema próximamente...")
+        # ... (el resto de tu lógica de Administradora es correcta) ...
 
     # --- PROMOTORA ---
-    elif rol == "Promotora":
+    elif rol_limpio == "promotora":
         st.title("Panel de Promotora")
-        id_distrito = usuario.get('id_distrito') or usuario.get('ID_Distrito')
-        st.sidebar.success(f"✅ Acceso al distrito {id_distrito}")
-        st.write(f"Puedes gestionar los grupos del distrito {id_distrito}.")
+        # ... (código de Promotora) ...
 
     # --- DIRECTIVA ---
-    elif rol == "Directiva":
+    elif rol_limpio == "directiva":
         st.title("Panel de Directiva")
-        id_grupo = usuario.get('id_grupo') or usuario.get('ID_Grupo')
-        id_distrito = usuario.get('id_distrito') or usuario.get('ID_Distrito')
-        st.sidebar.success(f"✅ Grupo {id_grupo} del distrito {id_distrito}")
-        registrar_beneficiario(id_grupo)
+        # ... (código de Directiva) ...
 
     else:
         st.error("❌ Rol no reconocido.")
