@@ -1,10 +1,11 @@
 def mostrar_panel():
     import streamlit as st
     
-    # IMPORTACIONES RELATIVAS (ESTÁNDAR DE PYTHON PARA PAQUETES)
-    # Esto busca los archivos dentro del mismo paquete 'modulos' (que tiene __init__.py)
+    # Esta línea ahora debe funcionar porque la ruta fue corregida en app.py
     from modulos.registro_beneficiarios import registrar_beneficiario, ver_todos_miembros, crear_miembro
     from modulos.registro_usuarios import registrar_usuario
+    
+    # ... el resto de la función ...
     
     # --- VALIDACIÓN ROBUSTA DE SESIÓN ---
     if "usuario" not in st.session_state or st.session_state["usuario"] is None:
