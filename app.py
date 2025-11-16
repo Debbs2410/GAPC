@@ -2,11 +2,6 @@
 
 import streamlit as st
 
-
-
-sys.path.append(os.path.join(current_dir, 'modulos'))
-
-
 from modulos.panel import mostrar_panel
 
 
