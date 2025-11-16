@@ -1,7 +1,8 @@
 def mostrar_panel():
     import streamlit as st
     
-    # 🚨 LÍNEAS CORREGIDAS: Usamos la importación relativa (el punto .)
+    # IMPORTACIONES RELATIVAS (ESTÁNDAR DE PYTHON PARA PAQUETES)
+    # Esto busca los archivos dentro del mismo paquete 'modulos' (que tiene __init__.py)
     from .registro_beneficiarios import registrar_beneficiario, ver_todos_miembros, crear_miembro
     from .registro_usuarios import registrar_usuario
     
@@ -11,6 +12,7 @@ def mostrar_panel():
         return
 
     usuario = st.session_state["usuario"]
+    # Intentamos obtener el rol de forma segura
     rol_raw = usuario.get("rol") or usuario.get("Rol")
     
     if rol_raw:
