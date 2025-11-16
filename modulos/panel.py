@@ -21,7 +21,7 @@ def mostrar_panel():
         st.sidebar.success("✅ Control total del sistema.")
         st.write("Acceso completo a todos los distritos y grupos.")
 
-        opcion = st.sidebar.radio(
+        opcion = st.selectbox(
             "Selecciona una acción:",
             ["Registrar usuario", "Gestionar Miembros", "Ver reportes", "Configuraciones", "Grupo", "Ciclos", "Caja"],
         )
