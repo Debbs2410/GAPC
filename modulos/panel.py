@@ -2,9 +2,7 @@ def mostrar_panel():
     import streamlit as st
     
     # Esta línea ahora debe funcionar porque la ruta fue corregida en app.py
-    from modulos.registro_beneficiarios import registrar_beneficiario, ver_todos_miembros, crear_miembro
-    from modulos.registro_usuarios import registrar_usuario
-    
+   
     # ... el resto de la función ...
     
     # --- VALIDACIÓN ROBUSTA DE SESIÓN ---
