@@ -23,7 +23,7 @@ def mostrar_panel():
 
         opcion = st.sidebar.radio(
             "Selecciona una acción:",
-            ["Registrar usuario", "Gestionar Miembros", "Ver reportes", "Configuraciones", "Grupo"],
+            ["Registrar usuario", "Gestionar Miembros", "Ver reportes", "Configuraciones", "Grupo", "Ciclos", "Caja"],
         )
 
         if opcion == "Registrar usuario":
