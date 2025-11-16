@@ -2,9 +2,13 @@ import streamlit as st
 from modulos.config.conexion import obtener_conexion
 import hashlib
 import pandas as pd
-
 def ver_todos_miembros():
     """Vista para que la Administradora vea todos los miembros de todos los distritos."""
+    
+    import streamlit as st
+    from modulos.config.conexion import obtener_conexion
+    import pandas as pd 
+    
     st.subheader("👥 Ver Todos los Miembros del Sistema")
     
     conexion = obtener_conexion()
@@ -17,9 +21,10 @@ def ver_todos_miembros():
     try:
         # Obtener todos los miembros con información del grupo y distrito
         cursor.execute("""
-            SELECT m.id, m.nombre, m.sexo, m.grupo_id, m.distrito_id, m.creado_en,
+            SELECT m.id, m.nombre, m.sexo, m.Dui, m.Numero_Telefono, m.Direccion, -- COLUMNA CORREGIDA
+                   m.grupo_id, m.distrito_id, m.creado_en,
                    g.Nombre AS nombre_grupo, d.Nombre AS nombre_distrito
-            FROM miembros m
+            FROM Miembros m
             LEFT JOIN Grupos g ON m.grupo_id = g.Id_grupo
             LEFT JOIN Distritos d ON m.distrito_id = d.Id_distrito
             ORDER BY m.distrito_id, m.grupo_id, m.nombre
@@ -38,6 +43,9 @@ def ver_todos_miembros():
                 'id': 'ID',
                 'nombre': 'Nombre',
                 'sexo': 'Sexo',
+                'Dui': 'Dui',                           # CORREGIDO
+                'Numero_Telefono': 'Teléfono',          
+                'Direccion': 'Dirección',               
                 'grupo_id': 'Grupo ID',
                 'distrito_id': 'Distrito ID',
                 'nombre_grupo': 'Nombre Grupo',
@@ -59,6 +67,7 @@ def ver_todos_miembros():
     
     finally:
         conexion.close()
+
 
 def crear_miembro():
     """Formulario para que la Administradora cree nuevos miembros."""
