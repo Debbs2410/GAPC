@@ -60,9 +60,12 @@ def ver_todos_miembros():
     finally:
         conexion.close()
 
-
 def crear_miembro():
     """Formulario para que la Administradora cree nuevos miembros."""
+    
+    import streamlit as st
+    from modulos.config.conexion import obtener_conexion
+    
     st.subheader("➕ Crear Nuevo Miembro")
     
     conexion = obtener_conexion()
@@ -87,12 +90,17 @@ def crear_miembro():
         with col1:
             nombre = st.text_input("🔤 Nombre Completo del Miembro")
             sexo = st.selectbox("👤 Sexo", ["M", "F", "O"])
-        
+            # CAMPO CORREGIDO: Dui
+            dui = st.text_input("🆔 Dui (Documento Único de Identidad)")
+            
         with col2:
             # Selector de distrito
             distritos_dict = {d['Nombre']: d['Id_distrito'] for d in distritos}
             distrito_nombre = st.selectbox("📍 Distrito", list(distritos_dict.keys()))
             distrito_id = distritos_dict[distrito_nombre]
+            
+            # Número de Teléfono
+            num_telefono = st.text_input("📞 Número de Teléfono")
             
             # Cargar grupos del distrito seleccionado
             cursor.execute(
@@ -109,14 +117,24 @@ def crear_miembro():
             grupo_nombre = st.selectbox("👥 Grupo", list(grupos_dict.keys()))
             grupo_id = grupos_dict[grupo_nombre]
         
+        # Dirección (Full width)
+        direccion = st.text_area("🏠 Dirección Completa")
+        
         if st.button("✅ Registrar Miembro", type="primary"):
-            if not nombre:
-                st.warning("⚠️ Completa el nombre del miembro.")
+            # Validación de campos obligatorios
+            if not nombre or not dui or not num_telefono or not direccion:
+                st.warning("⚠️ Completa todos los campos obligatorios (Nombre, Dui, Teléfono y Dirección).")
                 return
             
-            # Validar que no exista duplicado
+            # Validación: Verificar que el Dui no esté duplicado
+            cursor.execute("SELECT COUNT(*) AS total FROM Miembros WHERE Dui = %s", (dui,))
+            if cursor.fetchone()["total"] > 0:
+                st.error("❌ El Dui ingresado ya se encuentra registrado en el sistema.")
+                return
+                
+            # Validar que no exista duplicado de nombre en el grupo
             cursor.execute(
-                "SELECT COUNT(*) AS total FROM miembros WHERE nombre = %s AND grupo_id = %s",
+                "SELECT COUNT(*) AS total FROM Miembros WHERE nombre = %s AND grupo_id = %s",
                 (nombre, grupo_id)
             )
             existe = cursor.fetchone()["total"]
@@ -125,13 +143,14 @@ def crear_miembro():
                 st.error(f"❌ Ya existe un miembro con el nombre '{nombre}' en este grupo.")
                 return
             
-            # Insertar nuevo miembro
+            # Insertar nuevo miembro CON LA COLUMNA CORREGIDA
             try:
                 sql = """
-                INSERT INTO miembros (nombre, sexo, grupo_id, distrito_id)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO Miembros (nombre, sexo, Dui, Numero_Telefono, Direccion, grupo_id, distrito_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """
-                cursor.execute(sql, (nombre, sexo, grupo_id, distrito_id))
+                # La tupla debe coincidir con el orden de las columnas del INSERT
+                cursor.execute(sql, (nombre, sexo, dui, num_telefono, direccion, grupo_id, distrito_id))
                 conexion.commit()
                 st.success(f"✅ Miembro '{nombre}' registrado correctamente en {grupo_nombre}.")
                 st.rerun()
@@ -140,7 +159,6 @@ def crear_miembro():
     
     finally:
         conexion.close()
-
 
 def registrar_beneficiario(id_grupo):
     st.subheader("👥 Registro de Beneficiarios")
