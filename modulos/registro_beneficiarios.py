@@ -163,6 +163,10 @@ def crear_miembro():
         conexion.close()
 
 def registrar_beneficiario(id_grupo):
+    import streamlit as st
+    from modulos.config.conexion import obtener_conexion
+    # hashlib ya no es necesario
+    
     st.subheader("👥 Registro de Beneficiarios")
 
     nombre = st.text_input("Nombre completo del beneficiario")
@@ -188,14 +192,19 @@ def registrar_beneficiario(id_grupo):
             conexion.close()
             return
 
-        contrasena_hash = hashlib.sha256(contrasena.encode()).hexdigest()
+        # --- CAMBIO CLAVE 1: Eliminación del HASH ---
+        # Usamos la contraseña en texto plano para el INSERT
+        contrasena_plana = contrasena
+        # La línea del hash fue eliminada: contrasena_hash = hashlib.sha256(...)
 
+        # --- CAMBIO CLAVE 2: Eliminación de id_distrito en SQL ---
         sql = """
-        INSERT INTO usuarios (nombre, correo, contrasena, rol, id_distrito, id_grupo)
-        VALUES (%s, %s, %s, 'Beneficiario',
-            (SELECT id_distrito FROM usuarios WHERE id_grupo = %s LIMIT 1), %s)
+        INSERT INTO usuarios (nombre, correo, contrasena, rol, id_grupo)
+        VALUES (%s, %s, %s, 'Beneficiario', %s)
         """
-        cursor.execute(sql, (nombre, correo, contrasena_hash, id_grupo, id_grupo))
+        # La tupla de valores ya no incluye el hash ni referencias a id_distrito
+        cursor.execute(sql, (nombre, correo, contrasena_plana, id_grupo))
+        
         conexion.commit()
         conexion.close()
 
