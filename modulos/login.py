@@ -1,6 +1,6 @@
 import streamlit as st
 from modulos.config.conexion import obtener_conexion
-# import hashlib  <-- YA NO ES NECESARIA ESTA LIBRERÍA
+# Ya no importamos hashlib
 
 def login():
     st.title("🔐 Inicio de Sesión - Cooperativa GAPC")
@@ -19,10 +19,14 @@ def login():
             return
 
         cursor = conexion.cursor(dictionary=True)
+    
         contrasena_plana = contrasena
         
-        # Usando 'Usuarios', 'Correo', y 'Contraseña'
-        cursor.execute("SELECT * FROM Usuarios WHERE Correo = %s AND Contraseña = %s",  )
+        # 👇 LÍNEA CORREGIDA: Agregamos la tupla de parámetros
+        cursor.execute(
+            "SELECT * FROM Usuarios WHERE Correo = %s AND Contraseña = %s",
+            (correo, contrasena_plana) 
+        )
 
         usuario = cursor.fetchone()
         conexion.close()
