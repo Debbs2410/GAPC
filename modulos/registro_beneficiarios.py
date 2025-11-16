@@ -87,7 +87,7 @@ def ver_todos_miembros():
         conexion.close()
 
 def crear_miembro():
-    """Formulario para que la Administradora cree nuevos miembros."""
+    """Formulario simplificado para la Administradora que crea nuevos miembros sin usar la lógica de distrito."""
     
     import streamlit as st
     from modulos.config.conexion import obtener_conexion
@@ -102,12 +102,13 @@ def crear_miembro():
     cursor = conexion.cursor(dictionary=True)
     
     try:
-        # Obtener lista de distritos
-        cursor.execute("SELECT Id_distrito, Nombre FROM Distritos ORDER BY Id_distrito")
-        distritos = cursor.fetchall()
+        # 1. Obtener lista de GRUPOS directamente (sin filtrar por distrito)
+        # La consulta asume que solo necesitamos Id_grupo y Nombre.
+        cursor.execute("SELECT Id_grupo, Nombre FROM Grupos ORDER BY Nombre")
+        grupos = cursor.fetchall()
         
-        if not distritos:
-            st.error("❌ No hay distritos registrados en el sistema.")
+        if not grupos:
+            st.error("❌ No hay grupos registrados en el sistema.")
             return
         
         # Formulario en columnas
@@ -116,40 +117,29 @@ def crear_miembro():
         with col1:
             nombre = st.text_input("🔤 Nombre Completo del Miembro")
             sexo = st.selectbox("👤 Sexo", ["M", "F", "O"])
-            # CAMPO CORREGIDO: Dui
             dui = st.text_input("🆔 Dui (Documento Único de Identidad)")
             
         with col2:
-            # Selector de distrito
-            distritos_dict = {d['Nombre']: d['Id_distrito'] for d in distritos}
-            distrito_nombre = st.selectbox("📍 Distrito", list(distritos_dict.keys()))
-            distrito_id = distritos_dict[distrito_nombre]
-            
-            # Número de Teléfono
             num_telefono = st.text_input("📞 Número de Teléfono")
             
-            # Cargar grupos del distrito seleccionado
-            cursor.execute(
-                "SELECT Id_grupo, Nombre FROM Grupos WHERE Id_distrito = %s ORDER BY Nombre",
-                (distrito_id,)
-            )
-            grupos = cursor.fetchall()
-            
-            if not grupos:
-                st.warning(f"⚠️ No hay grupos en el distrito '{distrito_nombre}'")
-                return
-            
+            # Selector de Grupo
             grupos_dict = {g['Nombre']: g['Id_grupo'] for g in grupos}
             grupo_nombre = st.selectbox("👥 Grupo", list(grupos_dict.keys()))
             grupo_id = grupos_dict[grupo_nombre]
-        
-        # Dirección (Full width)
+            
+        # Dirección (Campo que siempre debe ser visible)
         direccion = st.text_area("🏠 Dirección Completa")
+        
+        # Definimos el distrito_id como None o 1 si es necesario para la DB
+        # Si la columna distrito_id en 'Miembros' NO existe o acepta NULL:
+        distrito_id = None 
+        # Si la columna distrito_id en 'Miembros' es NOT NULL y debe tener un valor:
+        # distrito_id = 1 
         
         if st.button("✅ Registrar Miembro", type="primary"):
             # Validación de campos obligatorios
             if not nombre or not dui or not num_telefono or not direccion:
-                st.warning("⚠️ Completa todos los campos obligatorios (Nombre, Dui, Teléfono y Dirección).")
+                st.warning("⚠️ Completa todos los campos obligatorios.")
                 return
             
             # Validación: Verificar que el Dui no esté duplicado
@@ -169,14 +159,16 @@ def crear_miembro():
                 st.error(f"❌ Ya existe un miembro con el nombre '{nombre}' en este grupo.")
                 return
             
-            # Insertar nuevo miembro CON LA COLUMNA CORREGIDA
+            # 2. Insertar nuevo miembro: NO INCLUYE distrito_id EN LA SENTENCIA SQL
             try:
+                # La sentencia SQL debe coincidir con la tupla y el campo distrito_id se omite
                 sql = """
-                INSERT INTO Miembros (nombre, sexo, Dui, Numero_Telefono, Direccion, grupo_id, distrito_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO Miembros (nombre, sexo, Dui, Numero_Telefono, Direccion, grupo_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 """
-                # La tupla debe coincidir con el orden de las columnas del INSERT
-                cursor.execute(sql, (nombre, sexo, dui, num_telefono, direccion, grupo_id, distrito_id))
+                # La tupla de valores no incluye el distrito_id
+                cursor.execute(sql, (nombre, sexo, dui, num_telefono, direccion, grupo_id))
+
                 conexion.commit()
                 st.success(f"✅ Miembro '{nombre}' registrado correctamente en {grupo_nombre}.")
                 st.rerun()
