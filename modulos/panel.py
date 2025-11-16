@@ -2,7 +2,7 @@
 
 # 1. IMPORTACIONES GLOBALES (Nivel superior del archivo)
 import streamlit as st
-from modulos.registro_beneficiarios import registrar_beneficiario,  
+from modulos.registro_beneficiarios import registrar_beneficiario, crear_miembro, ver_todos_miembros
 from modulos.registro_usuarios import registrar_usuario
 
 
