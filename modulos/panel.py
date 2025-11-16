@@ -1,11 +1,9 @@
 def mostrar_panel():
     import streamlit as st
     
-    # --- CORRECCIÓN DE IMPORTACIÓN: Usamos el nombre del archivo directamente ---
-    # Esto asume que Python puede encontrar 'registro_beneficiarios' y 'registro_usuarios'
-    # en la misma ruta de búsqueda (dentro de la carpeta 'modulos').
-    import registro_beneficiarios
-    import registro_usuarios
+    # 🚨 LÍNEAS CORREGIDAS: Usamos la ruta absoluta 'modulos.archivo'
+    from modulos.registro_beneficiarios import registrar_beneficiario, ver_todos_miembros, crear_miembro
+    from modulos.registro_usuarios import registrar_usuario
     
     # --- VALIDACIÓN ROBUSTA DE SESIÓN ---
     if "usuario" not in st.session_state or st.session_state["usuario"] is None:
@@ -28,8 +26,7 @@ def mostrar_panel():
     if rol_limpio == "administradora":
         st.title("Panel de Administradora")
         st.sidebar.success("✅ Control total del sistema.")
-        # Se elimina la referencia a distritos
-        st.write("Acceso completo a todos los grupos y configuraciones.") 
+        st.write("Acceso completo a todos los grupos y configuraciones.")
 
         opcion = st.sidebar.radio(
             "Selecciona una acción:",
@@ -37,14 +34,14 @@ def mostrar_panel():
         )
 
         if opcion == "Registrar usuario":
-            registro_usuarios.registrar_usuario()
+            registrar_usuario()
         
         elif opcion == "Gestionar Miembros":
             tab1, tab2 = st.tabs(["👥 Ver Todos los Miembros", "➕ Crear Nuevo Miembro"])
             with tab1:
-                registro_beneficiarios.ver_todos_miembros()
+                ver_todos_miembros()
             with tab2:
-                registro_beneficiarios.crear_miembro()
+                crear_miembro()
         
         elif opcion == "Grupo":
             st.info("📦 Módulo de Grupos.")
@@ -62,7 +59,6 @@ def mostrar_panel():
     # --- PROMOTORA ---
     elif rol_limpio == "promotora":
         st.title("Panel de Promotora")
-        # Referencias a id_distrito eliminadas
         st.sidebar.success(f"✅ Acceso a mis grupos asignados.")
         st.write(f"Puedes gestionar tus grupos.")
 
@@ -70,11 +66,8 @@ def mostrar_panel():
     elif rol_limpio == "directiva":
         st.title("Panel de Directiva")
         id_grupo = usuario.get('id_grupo') or usuario.get('ID_Grupo')
-        # Referencia a id_distrito eliminada
         st.sidebar.success(f"✅ Grupo {id_grupo}")
-        registro_beneficiarios.registrar_beneficiario(id_grupo)
+        registrar_beneficiario(id_grupo)
 
     else:
         st.error("❌ Rol no reconocido. Contacta al administrador.")
-
-
