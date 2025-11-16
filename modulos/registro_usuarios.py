@@ -1,6 +1,6 @@
 import streamlit as st
 from modulos.config.conexion import obtener_conexion
-import hashlib
+# hashlib ya no es necesario
 
 def registrar_usuario():
     st.title("🧾 Registro de Usuarios del Sistema")
@@ -9,16 +9,13 @@ def registrar_usuario():
     correo = st.text_input("Correo electrónico")
     contrasena = st.text_input("Contraseña", type="password")
     rol = st.selectbox("Rol", ["Administradora", "Promotora", "Directiva"])
-    id_distrito = None
+    
     id_grupo = None
 
-    # Si es promotora o directiva, mostrar campos adicionales
-    if rol == "Promotora":
-        id_distrito = st.number_input("Distrito", min_value=1, max_value=7, step=1)
-    elif rol == "Directiva":
-        id_distrito = st.number_input("Distrito al que pertenece", min_value=1, max_value=7, step=1)
+    # Si es Directiva, mostrar campo de grupo
+    if rol == "Directiva":
         id_grupo = st.number_input("Número de grupo", min_value=1, step=1)
-
+        
     if st.button("Registrar usuario"):
         if not nombre or not correo or not contrasena:
             st.warning("⚠️ Completa todos los campos.")
@@ -30,9 +27,12 @@ def registrar_usuario():
             return
 
         cursor = conexion.cursor(dictionary=True)
-        contrasena_hash = hashlib.sha256(contrasena.encode()).hexdigest()
+        
+        # --- CAMBIO CLAVE: Se usa la contraseña en texto plano (contrasena_plana) ---
+        contrasena_plana = contrasena
+        # La lógica de hashing se ha ELIMINADO
 
-        # --- Reglas de negocio ---
+        # --- Reglas de negocio (Validaciones simplificadas) ---
         if rol == "Administradora":
             cursor.execute("SELECT COUNT(*) AS total FROM usuarios WHERE rol = 'Administradora'")
             total_admin = cursor.fetchone()["total"]
@@ -41,23 +41,13 @@ def registrar_usuario():
                 conexion.close()
                 return
 
-        elif rol == "Promotora":
-            if not id_distrito:
-                st.warning("⚠️ Debes indicar un distrito.")
-                conexion.close()
-                return
-            cursor.execute("SELECT COUNT(*) AS total FROM usuarios WHERE rol = 'Promotora' AND id_distrito = %s", (id_distrito,))
-            total_prom = cursor.fetchone()["total"]
-            if total_prom >= 1:
-                st.error(f"❌ Ya existe una promotora registrada en el distrito {id_distrito}.")
-                conexion.close()
-                return
-
         elif rol == "Directiva":
-            if not id_distrito or not id_grupo:
-                st.warning("⚠️ Debes indicar distrito y grupo.")
+            if not id_grupo:
+                st.warning("⚠️ Debes indicar el número de grupo.")
                 conexion.close()
                 return
+            
+            # Validar que solo exista 1 Directiva por grupo
             cursor.execute("SELECT COUNT(*) AS total FROM usuarios WHERE rol = 'Directiva' AND id_grupo = %s", (id_grupo,))
             total_dir = cursor.fetchone()["total"]
             if total_dir >= 1:
@@ -66,12 +56,20 @@ def registrar_usuario():
                 return
 
         # --- Inserción del usuario ---
-        sql = """
-        INSERT INTO usuarios (nombre, correo, contrasena, rol, id_distrito, id_grupo)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        """
-        cursor.execute(sql, (nombre, correo, contrasena_hash, rol, id_distrito, id_grupo))
-        conexion.commit()
-        conexion.close()
+        try:
+            # SENTENCIA SQL: Se omite 'id_distrito'
+            sql = """
+            INSERT INTO usuarios (nombre, correo, contrasena, rol, id_grupo)
+            VALUES (%s, %s, %s, %s, %s)
+            """
+            # Se usa contrasena_plana en la tupla de valores
+            cursor.execute(sql, (nombre, correo, contrasena_plana, rol, id_grupo))
+            
+            conexion.commit()
+            st.success(f"✅ Usuario {rol} registrado correctamente.")
+        
+        except Exception as e:
+            st.error(f"❌ Error al registrar en la DB: {str(e)}.")
 
-        st.success(f"✅ Usuario {rol} registrado correctamente.")
+        finally:
+            conexion.close()
