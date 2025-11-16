@@ -1,10 +1,13 @@
+# --- EN EL ARCHIVO modulos/panel.py ---
+
+# 1. IMPORTACIONES GLOBALES (Nivel superior del archivo)
+import streamlit as st
+from .registro_beneficiarios import registrar_beneficiario, ver_todos_miembros, crear_miembro
+from .registro_usuarios import registrar_usuario
+
+
 def mostrar_panel():
-    import streamlit as st
-from modulos.registro_beneficiarios import registrar_beneficiario, ver_todos_miembros, crear_miembro
-from modulos.registro_usuarios      import registrar_usuario
-    
-   
-    # ... el resto de la función ...
+    # Eliminamos las líneas de importación de aquí, solo queda la lógica.
     
     # --- VALIDACIÓN ROBUSTA DE SESIÓN ---
     if "usuario" not in st.session_state or st.session_state["usuario"] is None:
@@ -12,7 +15,6 @@ from modulos.registro_usuarios      import registrar_usuario
         return
 
     usuario = st.session_state["usuario"]
-    # Intentamos obtener el rol de forma segura
     rol_raw = usuario.get("rol") or usuario.get("Rol")
     
     if rol_raw:
