@@ -3,8 +3,8 @@ def mostrar_panel():
     
     # IMPORTACIONES RELATIVAS (ESTÁNDAR DE PYTHON PARA PAQUETES)
     # Esto busca los archivos dentro del mismo paquete 'modulos' (que tiene __init__.py)
-    from .registro_beneficiarios import registrar_beneficiario, ver_todos_miembros, crear_miembro
-    from .registro_usuarios import registrar_usuario
+    from modulos.registro_beneficiarios import registrar_beneficiario, ver_todos_miembros, crear_miembro
+    from modulos.registro_usuarios import registrar_usuario
     
     # --- VALIDACIÓN ROBUSTA DE SESIÓN ---
     if "usuario" not in st.session_state or st.session_state["usuario"] is None:
