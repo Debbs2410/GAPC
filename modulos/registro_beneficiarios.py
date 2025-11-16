@@ -3,7 +3,7 @@ from modulos.config.conexion import obtener_conexion
 import hashlib
 import pandas as pd
 def ver_todos_miembros():
-    """Vista para que la Administradora vea todos los miembros del sistema."""
+    """Vista para que la Administradora vea todos los miembros del sistema, sin lógica de distrito."""
     
     import streamlit as st
     from modulos.config.conexion import obtener_conexion
@@ -19,15 +19,14 @@ def ver_todos_miembros():
     cursor = conexion.cursor(dictionary=True)
     
     try:
-        # La consulta SQL permanece igual
+        # CONSULTA SQL CORREGIDA: Solo usa la tabla Miembros y Grupos (JOIN)
         cursor.execute("""
-            SELECT m.id, m.nombre, m.sexo, m.Dui, m.Numero_Telefono, m.Direccion,
-                   m.grupo_id, m.distrito_id, m.creado_en,
-                   g.Nombre AS nombre_grupo, d.Nombre AS nombre_distrito
+            SELECT m.id, m.nombre, m.sexo, m.Dui, m.Numero_Telefono, m.Direccion, 
+                   m.grupo_id, m.creado_en, 
+                   g.Nombre AS nombre_grupo
             FROM Miembros m
             LEFT JOIN Grupos g ON m.grupo_id = g.Id_grupo
-            LEFT JOIN Distritos d ON m.distrito_id = d.Id_distrito
-            ORDER BY m.distrito_id, m.grupo_id, m.nombre
+            ORDER BY m.grupo_id, m.nombre
         """)
         
         miembros = cursor.fetchall()
@@ -37,50 +36,41 @@ def ver_todos_miembros():
         else:
             df = pd.DataFrame(miembros)
             
-            # 1. Renombrar columnas para mejor legibilidad y estilo
+            # RENOMBRADO: Se eliminan las columnas relacionadas con Distrito
             df = df.rename(columns={
                 'id': 'ID',
                 'nombre': 'Nombre',
                 'sexo': 'Sexo',
-                'Dui': 'Dui',                          
+                'Dui': 'Dui',
                 'Numero_Telefono': 'Teléfono',          
                 'Direccion': 'Dirección',               
                 'grupo_id': 'Grupo ID',
-                'distrito_id': 'Distrito ID',
                 'nombre_grupo': 'Nombre Grupo',
-                'nombre_distrito': 'Nombre Distrito',
                 'creado_en': 'Fecha Creación'
             })
             
-            # 2. DEFINIR EL NUEVO ORDEN DE COLUMNAS
+            # ORDEN DE COLUMNAS SOLICITADO
             columnas_ordenadas = [
                 'ID',
-                'Grupo ID',      # Nuevo orden
-                'Distrito ID',   # Nuevo orden
+                'Grupo ID',     
                 'Nombre',
                 'Sexo',
                 'Dui',
                 'Teléfono',
                 'Dirección',
                 'Nombre Grupo',
-                'Nombre Distrito',
                 'Fecha Creación' 
             ]
             
-            # Aplicar el nuevo orden
             df = df[columnas_ordenadas]
 
-            # 3. Mostrar tabla interactiva (quitando el índice de Pandas)
-            # 👇 CAMBIO CLAVE: index=False para ocultar la columna '0'
             st.dataframe(df, use_container_width=True, hide_index=True)
             
-            # Estadísticas
-            col1, col2, col3 = st.columns(3)
+            # ESTADÍSTICAS CORREGIDAS
+            col1, col2 = st.columns(2)
             with col1:
                 st.metric("Total de Miembros", len(miembros))
             with col2:
-                st.metric("Distritos Activos", df['Distrito ID'].nunique())
-            with col3:
                 st.metric("Grupos Activos", df['Grupo ID'].nunique())
     
     finally:
@@ -102,8 +92,7 @@ def crear_miembro():
     cursor = conexion.cursor(dictionary=True)
     
     try:
-        # 1. Obtener lista de GRUPOS directamente (sin filtrar por distrito)
-        # La consulta asume que solo necesitamos Id_grupo y Nombre.
+        # Obtener lista de GRUPOS directamente
         cursor.execute("SELECT Id_grupo, Nombre FROM Grupos ORDER BY Nombre")
         grupos = cursor.fetchall()
         
@@ -127,14 +116,8 @@ def crear_miembro():
             grupo_nombre = st.selectbox("👥 Grupo", list(grupos_dict.keys()))
             grupo_id = grupos_dict[grupo_nombre]
             
-        # Dirección (Campo que siempre debe ser visible)
+        # Dirección
         direccion = st.text_area("🏠 Dirección Completa")
-        
-        # Definimos el distrito_id como None o 1 si es necesario para la DB
-        # Si la columna distrito_id en 'Miembros' NO existe o acepta NULL:
-        distrito_id = None 
-        # Si la columna distrito_id en 'Miembros' es NOT NULL y debe tener un valor:
-        # distrito_id = 1 
         
         if st.button("✅ Registrar Miembro", type="primary"):
             # Validación de campos obligatorios
@@ -159,14 +142,12 @@ def crear_miembro():
                 st.error(f"❌ Ya existe un miembro con el nombre '{nombre}' en este grupo.")
                 return
             
-            # 2. Insertar nuevo miembro: NO INCLUYE distrito_id EN LA SENTENCIA SQL
+            # INSERT: Se omite la columna distrito_id
             try:
-                # La sentencia SQL debe coincidir con la tupla y el campo distrito_id se omite
                 sql = """
                 INSERT INTO Miembros (nombre, sexo, Dui, Numero_Telefono, Direccion, grupo_id)
                 VALUES (%s, %s, %s, %s, %s, %s)
                 """
-                # La tupla de valores no incluye el distrito_id
                 cursor.execute(sql, (nombre, sexo, dui, num_telefono, direccion, grupo_id))
 
                 conexion.commit()
@@ -174,6 +155,9 @@ def crear_miembro():
                 st.rerun()
             except Exception as e:
                 st.error(f"❌ Error al registrar: {str(e)}")
+    
+    finally:
+        conexion.close()
     
     finally:
         conexion.close()
