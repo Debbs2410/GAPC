@@ -3,7 +3,7 @@ def mostrar_panel():
     
     # --- CORRECCIÓN DE IMPORTACIÓN ---
     # Usamos el punto (.) para importar desde el directorio actual (modulos/)
-    from modulos.registro_beneficiarios import registrar_beneficiario, ver_todos_miembros, crear_miembro
+    from .registro_beneficiarios import registrar_beneficiario, ver_todos_miembros, crear_miembro
     from modulos.registro_usuarios import registrar_usuario # Asumo que este también es un import relativo
     
     # --- VALIDACIÓN ROBUSTA DE SESIÓN ---
