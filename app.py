@@ -1,7 +1,8 @@
 import streamlit as st
 from modulos.login import login
 from modulos.panel import mostrar_panel
-
+import sys
+import os
 st.set_page_config(page_title="Cooperativa GAPC", layout="wide")
 
 if "autenticado" not in st.session_state:
