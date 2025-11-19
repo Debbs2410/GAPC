@@ -1,15 +1,11 @@
-# --- EN EL ARCHIVO modulos/panel.py ---
-
-# 1. IMPORTACIONES GLOBALES (Nivel superior del archivo)
 import streamlit as st
 from modulos.registro_beneficiarios import registrar_beneficiario, crear_miembro, ver_todos_miembros
 from modulos.registro_usuarios import registrar_usuario
+from modulos.grupos import gestionar_grupos
+from modulos.ciclos import gestionar_ciclos
 
 
 def mostrar_panel():
-    # Eliminamos las líneas de importación de aquí, solo queda la lógica.
-    
-    # --- VALIDACIÓN ROBUSTA DE SESIÓN ---
     if "usuario" not in st.session_state or st.session_state["usuario"] is None:
         st.error("No hay usuario en sesión. Por favor inicia sesión.")
         return
@@ -22,14 +18,12 @@ def mostrar_panel():
     else:
         rol_limpio = ""
 
-    # --- Menú lateral ---
     st.sidebar.title("📋 Menú de navegación")
     st.sidebar.write(f"👤 {usuario.get('Nombre_Usuario', usuario.get('nombre', 'Sin nombre'))} ({rol_raw})")
 
-    # --- ADMINISTRADORA ---
     if rol_limpio == "administradora":
         st.title("Panel de Administradora")
-        st.sidebar.success("✅ Control total del sistema.")
+        st.sidebar.success("Control total del sistema.")
         st.write("Acceso completo a todos los grupos y configuraciones.")
 
         opcion = st.sidebar.radio(
@@ -48,22 +42,22 @@ def mostrar_panel():
                 crear_miembro()
         
         elif opcion == "Grupo":
-            st.info("📦 Módulo de Grupos.")
+            gestionar_grupos()
         elif opcion == "Ciclos":
-            st.info("⏳ Módulo de Ciclos.")
+            gestionar_ciclos()
         elif opcion == "Caja":
-            st.info("💰 Módulo de Caja.")
+            st.info("Módulo de Caja.")
 
         elif opcion == "Ver reportes":
-            st.info("📊 Módulo de reportes en desarrollo...")
+            st.info("Módulo de reportes en desarrollo...")
         
         elif opcion == "Configuraciones":
-            st.info("⚙️ Opciones de configuración del sistema próximamente...")
+            st.info("Opciones de configuración del sistema próximamente...")
 
     # --- PROMOTORA ---
     elif rol_limpio == "promotora":
         st.title("Panel de Promotora")
-        st.sidebar.success(f"✅ Acceso a mis grupos asignados.")
+        st.sidebar.success(f"Acceso a mis grupos asignados.")
         st.write(f"Puedes gestionar tus grupos.")
 
     # --- DIRECTIVA ---

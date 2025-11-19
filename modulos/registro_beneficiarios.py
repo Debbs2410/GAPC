@@ -158,9 +158,6 @@ def crear_miembro():
     
     finally:
         conexion.close()
-    
-    finally:
-        conexion.close()
 
 def registrar_beneficiario(id_grupo):
     import streamlit as st
