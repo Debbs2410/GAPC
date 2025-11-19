@@ -3,6 +3,7 @@ from modulos.registro_beneficiarios import registrar_beneficiario, crear_miembro
 from modulos.registro_usuarios import registrar_usuario
 from modulos.grupos import gestionar_grupos
 from modulos.ciclos import gestionar_ciclos
+from modulos.asistencia_multas import gestionar_asistencia_multas
 
 
 def mostrar_panel():
@@ -28,7 +29,7 @@ def mostrar_panel():
 
         opcion = st.sidebar.radio(
             "Selecciona una acción:",
-            ["Registrar usuario", "Gestionar Miembros", "Grupo", "Ciclos", "Caja", "Ver reportes", "Configuraciones"],
+            ["Registrar usuario", "Gestionar Miembros", "Grupo", "Ciclos", "Asistencia y Multas", "Caja", "Ver reportes", "Configuraciones"],
         )
 
         if opcion == "Registrar usuario":
@@ -45,6 +46,8 @@ def mostrar_panel():
             gestionar_grupos()
         elif opcion == "Ciclos":
             gestionar_ciclos()
+        elif opcion == "Asistencia y Multas":
+            gestionar_asistencia_multas()
         elif opcion == "Caja":
             st.info("Módulo de Caja.")
 
