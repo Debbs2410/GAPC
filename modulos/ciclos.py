@@ -5,29 +5,27 @@ from datetime import datetime, timedelta
 import datetime as dt
 
 
-def gestionar_ciclos():
+def gestionar_ciclos(id_distrito=None):
     """
     Función principal para gestionar ciclos.
     Permite crear, ver y gestionar el estado de los ciclos.
+    Si se proporciona id_distrito, filtra los ciclos y operaciones por ese distrito.
     """
     st.title("Gestión de Ciclos")
-    
     # Tabs para organizar las funcionalidades
     tab1, tab2, tab3 = st.tabs(["Ver Ciclos", "Crear Ciclo", "Gestionar Estado"])
-    
     with tab1:
-        ver_todos_ciclos()
-    
+        ver_todos_ciclos(id_distrito=id_distrito)
     with tab2:
-        crear_ciclo()
-    
+        crear_ciclo(id_distrito=id_distrito)
     with tab3:
-        gestionar_estado_ciclos()
+        gestionar_estado_ciclos(id_distrito=id_distrito)
 
 
-def ver_todos_ciclos():
+def ver_todos_ciclos(id_distrito=None):
     """
     Muestra todos los ciclos registrados en el sistema con su información completa.
+    Si se proporciona id_distrito, solo muestra ciclos asociados a grupos de ese distrito.
     """
     st.subheader("Historial de Ciclos")
     
@@ -39,27 +37,50 @@ def ver_todos_ciclos():
     cursor = conexion.cursor(dictionary=True)
     
     try:
-        # Consulta para obtener ciclos con información adicional
-        cursor.execute("""
-            SELECT 
-                c.Id_Ciclo,
-                c.Fecha_Inicio,
-                c.Fecha_Fin,
-                c.Ahorro_Acumulado,
-                COUNT(DISTINCT g.Id_grupo) as num_grupos,
-                GROUP_CONCAT(DISTINCT g.Nombre SEPARATOR ', ') as grupos_nombres,
-                DATEDIFF(c.Fecha_Fin, c.Fecha_Inicio) as duracion_dias,
-                CASE 
-                    WHEN CURDATE() < c.Fecha_Inicio THEN 'Pendiente'
-                    WHEN CURDATE() BETWEEN c.Fecha_Inicio AND c.Fecha_Fin THEN 'Activo'
-                    WHEN CURDATE() > c.Fecha_Fin THEN 'Completado'
-                END as estado
-            FROM Ciclo c
-            LEFT JOIN Grupos g ON g.Id_Ciclo = c.Id_Ciclo
-            GROUP BY c.Id_Ciclo
-            ORDER BY c.Fecha_Inicio DESC
-        """)
-        
+        # Consulta para obtener ciclos con información adicional y el ahorro real acumulado
+        if id_distrito is not None:
+            cursor.execute("""
+                SELECT 
+                    c.Id_Ciclo,
+                    c.Fecha_Inicio,
+                    c.Fecha_Fin,
+                    (SELECT IFNULL(SUM(Monto),0) FROM Ahorros WHERE Id_Ciclo = c.Id_Ciclo AND Estado = 'Activo') AS Ahorro_Real,
+                    c.Ahorro_Acumulado AS Ahorro_Anterior,
+                    COUNT(DISTINCT g.Id_grupo) as num_grupos,
+                    GROUP_CONCAT(DISTINCT g.Nombre SEPARATOR ', ') as grupos_nombres,
+                    DATEDIFF(c.Fecha_Fin, c.Fecha_Inicio) as duracion_dias,
+                    CASE 
+                        WHEN CURDATE() < c.Fecha_Inicio THEN 'Pendiente'
+                        WHEN CURDATE() BETWEEN c.Fecha_Inicio AND c.Fecha_Fin THEN 'Activo'
+                        WHEN CURDATE() > c.Fecha_Fin THEN 'Completado'
+                    END as estado
+                FROM Ciclo c
+                LEFT JOIN Grupos g ON g.Id_Ciclo = c.Id_Ciclo
+                WHERE g.distrito_id = %s
+                GROUP BY c.Id_Ciclo
+                ORDER BY c.Fecha_Inicio DESC
+            """, (id_distrito,))
+        else:
+            cursor.execute("""
+                SELECT 
+                    c.Id_Ciclo,
+                    c.Fecha_Inicio,
+                    c.Fecha_Fin,
+                    (SELECT IFNULL(SUM(Monto),0) FROM Ahorros WHERE Id_Ciclo = c.Id_Ciclo AND Estado = 'Activo') AS Ahorro_Real,
+                    c.Ahorro_Acumulado AS Ahorro_Anterior,
+                    COUNT(DISTINCT g.Id_grupo) as num_grupos,
+                    GROUP_CONCAT(DISTINCT g.Nombre SEPARATOR ', ') as grupos_nombres,
+                    DATEDIFF(c.Fecha_Fin, c.Fecha_Inicio) as duracion_dias,
+                    CASE 
+                        WHEN CURDATE() < c.Fecha_Inicio THEN 'Pendiente'
+                        WHEN CURDATE() BETWEEN c.Fecha_Inicio AND c.Fecha_Fin THEN 'Activo'
+                        WHEN CURDATE() > c.Fecha_Fin THEN 'Completado'
+                    END as estado
+                FROM Ciclo c
+                LEFT JOIN Grupos g ON g.Id_Ciclo = c.Id_Ciclo
+                GROUP BY c.Id_Ciclo
+                ORDER BY c.Fecha_Inicio DESC
+            """)
         ciclos = cursor.fetchall()
         
         if not ciclos:
@@ -67,21 +88,18 @@ def ver_todos_ciclos():
         else:
             # Convertir a DataFrame
             df = pd.DataFrame(ciclos)
-            
-            # Renombrar columnas
+            # Renombrar columnas y usar el ahorro real calculado
             df = df.rename(columns={
                 'Id_Ciclo': 'ID',
                 'Fecha_Inicio': 'Inicio',
                 'Fecha_Fin': 'Fin',
-                'Ahorro_Acumulado': 'Ahorro ($)',
+                'Ahorro_Real': 'Ahorro ($)',
                 'num_grupos': 'Grupos',
                 'duracion_dias': 'Días',
                 'estado': 'Estado'
             })
-            
             # Seleccionar columnas para mostrar
             df_display = df[['ID', 'Inicio', 'Fin', 'Días', 'Ahorro ($)', 'Grupos', 'Estado']]
-            
             # Aplicar formato de color según estado
             def color_estado(val):
                 if val == 'Activo':
@@ -91,14 +109,12 @@ def ver_todos_ciclos():
                 elif val == 'Pendiente':
                     return 'background-color: #FFD700'
                 return ''
-            
             # Mostrar tabla
             st.dataframe(
                 df_display.style.applymap(color_estado, subset=['Estado']),
                 use_container_width=True,
                 hide_index=True
             )
-            
             # Métricas generales
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -110,7 +126,7 @@ def ver_todos_ciclos():
                 ciclos_completados = len([c for c in ciclos if c['estado'] == 'Completado'])
                 st.metric("Completados", ciclos_completados)
             with col4:
-                ahorro_total = sum([c['Ahorro_Acumulado'] or 0 for c in ciclos])
+                ahorro_total = sum([c['Ahorro_Real'] or 0 for c in ciclos])
                 st.metric("Ahorro Total", f"${ahorro_total:.2f}")
             
             # Mostrar detalles expandibles de cada ciclo
@@ -125,22 +141,19 @@ def ver_todos_ciclos():
                     badge = "⚫"
                 else:
                     badge = "🟡"
-                
                 with st.expander(f"{badge} Ciclo {ciclo['Id_Ciclo']} - {ciclo['estado']} ({ciclo['Fecha_Inicio']} / {ciclo['Fecha_Fin']})"):
                     col1, col2 = st.columns(2)
-                    
                     with col1:
                         st.write(f"**Fecha Inicio:** {ciclo['Fecha_Inicio']}")
                         st.write(f"**Fecha Fin:** {ciclo['Fecha_Fin']}")
                         st.write(f"**Duración:** {ciclo['duracion_dias']} días (~{ciclo['duracion_dias']//7} semanas)")
-                        st.write(f"**Ahorro Acumulado:** ${ciclo['Ahorro_Acumulado'] or 0:.2f}")
-                    
+                        # Usar el campo correcto para el ahorro acumulado
+                        st.write(f"**Ahorro Acumulado:** ${ciclo.get('Ahorro_Real', 0) or 0:.2f}")
                     with col2:
                         st.write(f"**Grupos Asociados:** {ciclo['num_grupos']}")
                         if ciclo['grupos_nombres']:
                             st.write(f"**Nombres:** {ciclo['grupos_nombres']}")
                         st.write(f"**Estado:** {ciclo['estado']}")
-                        
                         # Calcular progreso si está activo
                         if ciclo['estado'] == 'Activo':
                             dias_totales = ciclo['duracion_dias']
@@ -148,12 +161,10 @@ def ver_todos_ciclos():
                             progreso = min(100, (dias_transcurridos / dias_totales) * 100)
                             st.progress(progreso / 100)
                             st.write(f"**Progreso:** {progreso:.1f}% ({dias_transcurridos}/{dias_totales} días)")
-                    
                     # Mostrar grupos del ciclo
                     if ciclo['num_grupos'] > 0:
                         st.write("---")
                         st.write("**Grupos en este ciclo:**")
-                        
                         cursor.execute("""
                             SELECT Id_grupo, Nombre, Numero_miembros 
                             FROM Grupos 
@@ -161,7 +172,6 @@ def ver_todos_ciclos():
                             ORDER BY Nombre
                         """, (ciclo['Id_Ciclo'],))
                         grupos = cursor.fetchall()
-                        
                         for g in grupos:
                             st.write(f"- **{g['Nombre']}** (ID: {g['Id_grupo']}) - {g['Numero_miembros']} miembros")
     
@@ -169,10 +179,11 @@ def ver_todos_ciclos():
         conexion.close()
 
 
-def crear_ciclo():
+def crear_ciclo(id_distrito=None):
     """
     Formulario para crear un nuevo ciclo.
     Los ciclos tienen una duración de 8 semanas (56 días).
+    Si se proporciona id_distrito, solo permite asignar el ciclo a grupos de ese distrito.
     """
     st.subheader("Crear Nuevo Ciclo")
     
@@ -217,18 +228,33 @@ def crear_ciclo():
             st.write("**Asignar Grupos al Ciclo** (opcional)")
             
             # Obtener grupos disponibles (sin ciclo asignado o con ciclo completado)
-            cursor.execute("""
-                SELECT g.Id_grupo, g.Nombre, g.Numero_miembros,
-                       c.Fecha_Fin,
-                       CASE 
-                           WHEN c.Fecha_Fin IS NULL THEN 'Sin ciclo'
-                           WHEN CURDATE() > c.Fecha_Fin THEN 'Ciclo completado'
-                           ELSE 'En ciclo activo'
-                       END as estado_ciclo
-                FROM Grupos g
-                LEFT JOIN Ciclo c ON g.Id_Ciclo = c.Id_Ciclo
-                ORDER BY g.Nombre
-            """)
+            if id_distrito is not None:
+                cursor.execute("""
+                    SELECT g.Id_grupo, g.Nombre, g.Numero_miembros,
+                           c.Fecha_Fin,
+                           CASE 
+                               WHEN c.Fecha_Fin IS NULL THEN 'Sin ciclo'
+                               WHEN CURDATE() > c.Fecha_Fin THEN 'Ciclo completado'
+                               ELSE 'En ciclo activo'
+                           END as estado_ciclo
+                    FROM Grupos g
+                    LEFT JOIN Ciclo c ON g.Id_Ciclo = c.Id_Ciclo
+                    WHERE g.distrito_id = %s
+                    ORDER BY g.Nombre
+                """, (id_distrito,))
+            else:
+                cursor.execute("""
+                    SELECT g.Id_grupo, g.Nombre, g.Numero_miembros,
+                           c.Fecha_Fin,
+                           CASE 
+                               WHEN c.Fecha_Fin IS NULL THEN 'Sin ciclo'
+                               WHEN CURDATE() > c.Fecha_Fin THEN 'Ciclo completado'
+                               ELSE 'En ciclo activo'
+                           END as estado_ciclo
+                    FROM Grupos g
+                    LEFT JOIN Ciclo c ON g.Id_Ciclo = c.Id_Ciclo
+                    ORDER BY g.Nombre
+                """)
             grupos = cursor.fetchall()
             
             # Filtrar grupos disponibles
@@ -321,9 +347,10 @@ def crear_ciclo():
         conexion.close()
 
 
-def gestionar_estado_ciclos():
+def gestionar_estado_ciclos(id_distrito=None):
     """
     Permite gestionar el estado de los ciclos: actualizar ahorro, finalizar ciclos, etc.
+    Si se proporciona id_distrito, solo permite gestionar ciclos de ese distrito.
     """
     st.subheader("⚙️ Gestionar Estado de Ciclos")
     
@@ -336,24 +363,45 @@ def gestionar_estado_ciclos():
     
     try:
         # Obtener ciclos activos y pendientes
-        cursor.execute("""
-            SELECT 
-                c.Id_Ciclo,
-                c.Fecha_Inicio,
-                c.Fecha_Fin,
-                c.Ahorro_Acumulado,
-                COUNT(DISTINCT g.Id_grupo) as num_grupos,
-                CASE 
-                    WHEN CURDATE() < c.Fecha_Inicio THEN 'Pendiente'
-                    WHEN CURDATE() BETWEEN c.Fecha_Inicio AND c.Fecha_Fin THEN 'Activo'
-                    WHEN CURDATE() > c.Fecha_Fin THEN 'Completado'
-                END as estado
-            FROM Ciclo c
-            LEFT JOIN Grupos g ON g.Id_Ciclo = c.Id_Ciclo
-            GROUP BY c.Id_Ciclo
-            HAVING estado IN ('Activo', 'Pendiente')
-            ORDER BY c.Fecha_Inicio DESC
-        """)
+        if id_distrito is not None:
+            cursor.execute("""
+                SELECT 
+                    c.Id_Ciclo,
+                    c.Fecha_Inicio,
+                    c.Fecha_Fin,
+                    c.Ahorro_Acumulado,
+                    COUNT(DISTINCT g.Id_grupo) as num_grupos,
+                    CASE 
+                        WHEN CURDATE() < c.Fecha_Inicio THEN 'Pendiente'
+                        WHEN CURDATE() BETWEEN c.Fecha_Inicio AND c.Fecha_Fin THEN 'Activo'
+                        WHEN CURDATE() > c.Fecha_Fin THEN 'Completado'
+                    END as estado
+                FROM Ciclo c
+                LEFT JOIN Grupos g ON g.Id_Ciclo = c.Id_Ciclo
+                WHERE g.distrito_id = %s
+                GROUP BY c.Id_Ciclo
+                HAVING estado IN ('Activo', 'Pendiente')
+                ORDER BY c.Fecha_Inicio DESC
+            """, (id_distrito,))
+        else:
+            cursor.execute("""
+                SELECT 
+                    c.Id_Ciclo,
+                    c.Fecha_Inicio,
+                    c.Fecha_Fin,
+                    c.Ahorro_Acumulado,
+                    COUNT(DISTINCT g.Id_grupo) as num_grupos,
+                    CASE 
+                        WHEN CURDATE() < c.Fecha_Inicio THEN 'Pendiente'
+                        WHEN CURDATE() BETWEEN c.Fecha_Inicio AND c.Fecha_Fin THEN 'Activo'
+                        WHEN CURDATE() > c.Fecha_Fin THEN 'Completado'
+                    END as estado
+                FROM Ciclo c
+                LEFT JOIN Grupos g ON g.Id_Ciclo = c.Id_Ciclo
+                GROUP BY c.Id_Ciclo
+                HAVING estado IN ('Activo', 'Pendiente')
+                ORDER BY c.Fecha_Inicio DESC
+            """)
         
         ciclos = cursor.fetchall()
         
