@@ -444,11 +444,14 @@ def ver_multas(id_grupo=None):
         # Filtros
         col1, col2, col3 = st.columns(3)
         
+        # Generar un sufijo único para los keys según el contexto de llamada
+        import uuid
+        key_suffix = str(uuid.uuid4())[:8]
         with col1:
-            estado_filtro = st.selectbox("Estado de Pago", ["Todas", "Pendiente", "Pagada", "Condonada"], key="multas_estado_filtro")
+            estado_filtro = st.selectbox("Estado de Pago", ["Todas", "Pendiente", "Pagada", "Condonada"], key=f"multas_estado_filtro_{key_suffix}")
         
         with col2:
-            tipo_filtro = st.selectbox("Tipo de Multa", ["Todas", "Inasistencia", "Tardanza", "Falta_Pago", "Incumplimiento", "Otro"], key="multas_tipo_filtro")
+            tipo_filtro = st.selectbox("Tipo de Multa", ["Todas", "Inasistencia", "Tardanza", "Falta_Pago", "Incumplimiento", "Otro"], key=f"multas_tipo_filtro_{key_suffix}")
         
         with col3:
             # Filtrar solo el grupo asignado si es promotora/directiva
@@ -460,7 +463,7 @@ def ver_multas(id_grupo=None):
             grupos = cursor.fetchall()
             grupos_dict = {"Todos": None}
             grupos_dict.update({g['Nombre']: g['Id_grupo'] for g in grupos})
-            grupo_filtro = st.selectbox("Grupo", list(grupos_dict.keys()), index=1 if id_grupo_usuario else 0, key="multas_grupo_filtro")
+            grupo_filtro = st.selectbox("Grupo", list(grupos_dict.keys()), index=1 if id_grupo_usuario else 0, key=f"multas_grupo_filtro_{key_suffix}")
             id_grupo_filtro = grupos_dict[grupo_filtro]
         
         # Construir consulta
