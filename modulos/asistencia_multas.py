@@ -53,7 +53,7 @@ def gestionar_asistencia_multas(id_distrito=None):
         cursor.execute("SELECT distrito_id, nombre_distrito FROM Distrito ORDER BY nombre_distrito")
         distritos = cursor.fetchall()
         distrito_nombres = ["Todos"] + [d['nombre_distrito'] for d in distritos]
-        distrito_sel = st.selectbox("Selecciona un distrito", distrito_nombres, key="asist_distrito_admin")
+        distrito_sel = st.selectbox("Selecciona un distrito", distrito_nombres, key="asist_distrito_admin_main")
         if distrito_sel == "Todos":
             distrito_id_sel = None
         else:
@@ -68,7 +68,7 @@ def gestionar_asistencia_multas(id_distrito=None):
             cursor.execute("SELECT Id_grupo, Nombre FROM Grupos ORDER BY Nombre")
             grupos = cursor.fetchall()
             grupo_nombres += [g['Nombre'] for g in grupos]
-        grupo_sel = st.selectbox("Selecciona un grupo", grupo_nombres, key="asist_grupo_admin")
+        grupo_sel = st.selectbox("Selecciona un grupo", grupo_nombres, key="asist_grupo_admin_main")
         if grupo_sel == "Todos":
             grupo_id_sel = None
         else:
@@ -127,7 +127,7 @@ def ver_asistencia_global(distrito_id_sel=None, grupo_id_sel=None):
         cursor.execute("SELECT distrito_id, nombre_distrito FROM Distrito ORDER BY nombre_distrito")
         distritos = cursor.fetchall()
         distrito_nombres = ["Todos"] + [d['nombre_distrito'] for d in distritos]
-        distrito_sel = st.selectbox("Selecciona un distrito", distrito_nombres, key="asist_distrito_admin")
+        distrito_sel = st.selectbox("Selecciona un distrito", distrito_nombres, key="asist_distrito_admin_global")
         if distrito_sel == "Todos":
             distrito_id_sel = None
         else:
@@ -142,7 +142,7 @@ def ver_asistencia_global(distrito_id_sel=None, grupo_id_sel=None):
             cursor.execute("SELECT Id_grupo, Nombre FROM Grupos ORDER BY Nombre")
             grupos = cursor.fetchall()
             grupo_nombres += [g['Nombre'] for g in grupos]
-        grupo_sel = st.selectbox("Selecciona un grupo", grupo_nombres, key="asist_grupo_admin")
+        grupo_sel = st.selectbox("Selecciona un grupo", grupo_nombres, key="asist_grupo_admin_global")
         if grupo_sel == "Todos":
             grupo_id_sel = None
         else:
