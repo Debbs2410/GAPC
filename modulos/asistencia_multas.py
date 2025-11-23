@@ -438,10 +438,10 @@ def ver_multas(id_grupo=None):
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            estado_filtro = st.selectbox("Estado de Pago", ["Todas", "Pendiente", "Pagada", "Condonada"])
+            estado_filtro = st.selectbox("Estado de Pago", ["Todas", "Pendiente", "Pagada", "Condonada"], key="multas_estado_filtro")
         
         with col2:
-            tipo_filtro = st.selectbox("Tipo de Multa", ["Todas", "Inasistencia", "Tardanza", "Falta_Pago", "Incumplimiento", "Otro"])
+            tipo_filtro = st.selectbox("Tipo de Multa", ["Todas", "Inasistencia", "Tardanza", "Falta_Pago", "Incumplimiento", "Otro"], key="multas_tipo_filtro")
         
         with col3:
             # Filtrar solo el grupo asignado si es promotora/directiva
@@ -453,7 +453,7 @@ def ver_multas(id_grupo=None):
             grupos = cursor.fetchall()
             grupos_dict = {"Todos": None}
             grupos_dict.update({g['Nombre']: g['Id_grupo'] for g in grupos})
-            grupo_filtro = st.selectbox("Grupo", list(grupos_dict.keys()), index=1 if id_grupo_usuario else 0)
+            grupo_filtro = st.selectbox("Grupo", list(grupos_dict.keys()), index=1 if id_grupo_usuario else 0, key="multas_grupo_filtro")
             id_grupo_filtro = grupos_dict[grupo_filtro]
         
         # Construir consulta
