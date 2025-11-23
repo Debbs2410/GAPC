@@ -111,12 +111,11 @@ def ver_todos_grupos(id_distrito=None):
                     ci.Fecha_Inicio as ciclo_inicio,
                     ci.Fecha_Fin as ciclo_fin,
                     ca.Fondo_Comun as fondo_comun,
-                    COUNT(DISTINCT u.Id_usuario) as num_promotoras
+                    (SELECT GROUP_CONCAT(Nombre_Usuario SEPARATOR ', ') FROM Usuarios WHERE Id_grupo = g.Id_grupo AND Rol = 'Promotora') as promotora_nombre
                 FROM Grupos g
                 LEFT JOIN Distrito d ON g.distrito_id = d.distrito_id
                 LEFT JOIN Ciclo ci ON g.Id_Ciclo = ci.Id_Ciclo
                 LEFT JOIN Caja ca ON g.Id_caja = ca.Id_caja
-                LEFT JOIN Usuarios u ON u.Id_grupo = g.Id_grupo AND u.Rol = 'Promotora'
                 WHERE g.distrito_id = %s
                 GROUP BY g.Id_grupo
                 ORDER BY g.Id_grupo
@@ -134,12 +133,11 @@ def ver_todos_grupos(id_distrito=None):
                     ci.Fecha_Inicio as ciclo_inicio,
                     ci.Fecha_Fin as ciclo_fin,
                     ca.Fondo_Comun as fondo_comun,
-                    COUNT(DISTINCT u.Id_usuario) as num_promotoras
+                    (SELECT GROUP_CONCAT(Nombre_Usuario SEPARATOR ', ') FROM Usuarios WHERE Id_grupo = g.Id_grupo AND Rol = 'Promotora') as promotora_nombre
                 FROM Grupos g
                 LEFT JOIN Distrito d ON g.distrito_id = d.distrito_id
                 LEFT JOIN Ciclo ci ON g.Id_Ciclo = ci.Id_Ciclo
                 LEFT JOIN Caja ca ON g.Id_caja = ca.Id_caja
-                LEFT JOIN Usuarios u ON u.Id_grupo = g.Id_grupo AND u.Rol = 'Promotora'
                 GROUP BY g.Id_grupo
                 ORDER BY g.Id_grupo
             """)
@@ -162,13 +160,14 @@ def ver_todos_grupos(id_distrito=None):
                 'ciclo_inicio': 'Ciclo Inicio',
                 'ciclo_fin': 'Ciclo Fin',
                 'fondo_comun': 'Fondo Común ($)',
-                'num_promotoras': 'Promotoras'
+                'promotora_nombre': 'Promotora'
             })
-            
             # Seleccionar columnas a mostrar
-            columnas_mostrar = ['ID', 'Nombre del Grupo', 'Distrito', 'Nº Miembros', 'ID Ciclo', 'ID Caja', 'Fondo Común ($)', 'Promotoras']
+            if es_administradora():
+                columnas_mostrar = ['ID', 'Nombre del Grupo', 'Distrito', 'Nº Miembros', 'ID Ciclo', 'ID Caja', 'Fondo Común ($)', 'Promotora']
+            else:
+                columnas_mostrar = ['ID', 'Nombre del Grupo', 'Distrito', 'Nº Miembros', 'ID Ciclo', 'ID Caja', 'Fondo Común ($)', 'Promotora']
             df_mostrar = df[columnas_mostrar]
-            
             # Mostrar tabla
             st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
             
