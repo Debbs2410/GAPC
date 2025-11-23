@@ -14,11 +14,9 @@ def gestionar_grupos(id_distrito=None):
     st.title("👥 Gestión de Grupos")
     # Tabs para organizar las funcionalidades
     if es_administradora():
-        tab1, tab3 = st.tabs(["📋 Ver Grupos", "✏️ Editar/Eliminar"])
+        tab1 = st.tabs(["📋 Ver Grupos"])[0]
         with tab1:
             ver_todos_grupos(id_distrito=id_distrito)
-        with tab3:
-            editar_eliminar_grupo(id_distrito=id_distrito)
     else:
         tab1, tab2, tab3 = st.tabs(["📋 Ver Grupos", "➕ Crear Grupo", "✏️ Editar/Eliminar"])
         with tab1:
@@ -216,28 +214,14 @@ def ver_todos_grupos(id_distrito=None):
                                 st.write(f"**Ciclo Fin:** {grupo['ciclo_fin']}")
                             st.write(f"**Fondo Común del grupo:** ${grupo['fondo_comun'] or 0:.2f}")
                             st.caption("Este fondo común es el mismo que se muestra en la sección de Caja para este grupo.")
-                        # Mostrar promotoras asignadas
-                        cursor.execute("""
-                            SELECT Nombre_Usuario as nombre, Correo as correo
-                            FROM Usuarios 
-                            WHERE Id_grupo = %s AND Rol = 'Promotora'
-                        """, (grupo['Id_grupo'],))
-                        promotoras = cursor.fetchall()
-                        if promotoras:
-                            st.write("**👩‍💼 Promotoras asignadas:**")
-                            for p in promotoras:
-                                st.write(f"- {p['nombre']} ({p['correo']})")
+                        # Mostrar promotora responsable del distrito
+                        id_distrito_grupo = grupo.get('distrito_id') or grupo.get('distrito') or id_distrito
+                        cursor.execute("SELECT Nombre_Usuario, Correo FROM Usuarios WHERE Rol = 'Promotora' AND Id_distrito = %s LIMIT 1", (id_distrito_grupo,))
+                        promotora_distrito = cursor.fetchone()
+                        if promotora_distrito:
+                            st.write(f"**👩‍💼 Promotora responsable:** {promotora_distrito['Nombre_Usuario']} ({promotora_distrito['Correo']})")
                         else:
-                            # Si se está filtrando por distrito, mostrar la promotora monitora del distrito
-                            if id_distrito is not None:
-                                cursor.execute("SELECT Nombre_Usuario, Correo FROM Usuarios WHERE Rol = 'Promotora' AND Id_distrito = %s LIMIT 1", (id_distrito,))
-                                promotora_distrito = cursor.fetchone()
-                                if promotora_distrito:
-                                    st.info(f"👩‍💼 Promotora monitora del distrito: {promotora_distrito['Nombre_Usuario']} ({promotora_distrito['Correo']})")
-                                else:
-                                    st.warning("⚠️ Sin promotora asignada al distrito")
-                            else:
-                                st.warning("⚠️ Sin promotoras asignadas")
+                            st.warning("⚠️ Sin promotora asignada a este distrito")
                         # Mostrar miembros del grupo
                         cursor.execute("""
                             SELECT nombre, sexo, Numero_Telefono 
@@ -444,6 +428,9 @@ def editar_eliminar_grupo(id_distrito=None):
     Si se proporciona id_distrito, solo permite editar/eliminar grupos de ese distrito.
     """
     st.subheader("✏️ Editar o Eliminar Grupo")
+    if es_administradora():
+        st.info("🔒 Solo lectura: la administradora no puede editar ni eliminar grupos. Solo puede visualizar los grupos existentes.")
+        return
     
     conexion = obtener_conexion()
     if not conexion:

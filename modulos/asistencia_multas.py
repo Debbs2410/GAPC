@@ -56,6 +56,25 @@ def gestionar_asistencia_multas(id_distrito=None):
         grupo_nombres = [g['Nombre'] for g in grupos]
         grupo_sel = st.selectbox("Selecciona un grupo", grupo_nombres, key="asist_grupo_admin")
         grupo_id_sel = next((g['Id_grupo'] for g in grupos if g['Nombre'] == grupo_sel), None)
+        # Mostrar promotoras asignadas al grupo seleccionado
+        if grupo_id_sel:
+            cursor.execute("""
+                SELECT Nombre_Usuario as nombre, Correo as correo
+                FROM Usuarios 
+                WHERE Id_grupo = %s AND Rol = 'Promotora'""", (grupo_id_sel,))
+            promotoras = cursor.fetchall()
+            if promotoras:
+                st.write("**👩‍💼 Promotoras asignadas a este grupo:**")
+                for p in promotoras:
+                    st.write(f"- {p['nombre']} ({p['correo']})")
+            else:
+                # Si no hay promotora asignada al grupo, buscar promotora monitora del distrito
+                cursor.execute("SELECT Nombre_Usuario, Correo FROM Usuarios WHERE Rol = 'Promotora' AND Id_distrito = %s LIMIT 1", (distrito_id_sel,))
+                promotora_distrito = cursor.fetchone()
+                if promotora_distrito:
+                    st.info(f"👩‍💼 Promotora monitora del distrito: {promotora_distrito['Nombre_Usuario']} ({promotora_distrito['Correo']})")
+                else:
+                    st.warning("⚠️ Sin promotora asignada al grupo ni al distrito")
         with tab1:
             ver_reuniones(id_distrito=distrito_id_sel, id_grupo=grupo_id_sel)
         with tab2:
