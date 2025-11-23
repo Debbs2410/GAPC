@@ -578,7 +578,7 @@ def ver_multas(id_grupo=None):
                         col_btn1, col_btn2 = st.columns(2)
                         
                         with col_btn1:
-                            if st.button(f"✅ Marcar como Pagada", key=f"pagar_{multa['Id_multa']}"):
+                            if st.button(f"✅ Marcar como Pagada", key=f"pagar_{multa['Id_multa']}_{key_suffix}"):
                                 cursor.execute(
                                     "UPDATE Multas SET Estado_pago = 'Pagada', Fecha_pago = CURDATE() WHERE Id_multa = %s",
                                     (multa['Id_multa'],)
@@ -588,7 +588,7 @@ def ver_multas(id_grupo=None):
                                 st.rerun()
                         
                         with col_btn2:
-                            if st.button(f"🔄 Condonar", key=f"condonar_{multa['Id_multa']}"):
+                            if st.button(f"🔄 Condonar", key=f"condonar_{multa['Id_multa']}_{key_suffix}"):
                                 cursor.execute(
                                     "UPDATE Multas SET Estado_pago = 'Condonada' WHERE Id_multa = %s",
                                     (multa['Id_multa'],)
