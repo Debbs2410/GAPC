@@ -1,4 +1,5 @@
 import streamlit as st
+from modulos.solo_lectura import es_administradora
 from modulos.config.conexion import obtener_conexion
 
 import pandas as pd
@@ -115,6 +116,7 @@ def crear_miembro(id_distrito=None, id_grupo=None):
     import streamlit as st
     from modulos.config.conexion import obtener_conexion
     
+    solo_lectura = es_administradora()
     st.subheader("➕ Crear Nuevo Miembro")
     
     conexion = obtener_conexion()
@@ -166,17 +168,17 @@ def crear_miembro(id_distrito=None, id_grupo=None):
         
         with col1:
             # Nombre: cada palabra inicia con mayúscula automáticamente
-            nombre_input = st.text_input("🔤 Nombre Completo del Miembro")
+            nombre_input = st.text_input("🔤 Nombre Completo del Miembro", disabled=solo_lectura)
             def title_case(text):
                 return ' '.join([w.capitalize() for w in text.split()])
             nombre = title_case(nombre_input)
             if nombre_input and nombre != nombre_input:
                 st.info(f"Se guardará como: {nombre}")
 
-            sexo = st.selectbox("👤 Sexo", ["M", "F", "O"])
+            sexo = st.selectbox("👤 Sexo", ["M", "F", "O"], disabled=solo_lectura)
 
             # DUI: solo 9 dígitos, sin guiones al escribir, pero se guarda como 12345678-9
-            dui_input = st.text_input("🆔 Dui (Documento Único de Identidad)", max_chars=9)
+            dui_input = st.text_input("🆔 Dui (Documento Único de Identidad)", max_chars=9, disabled=solo_lectura)
             dui_digits = ''.join(filter(str.isdigit, dui_input))[:9]
             dui = dui_digits[:8] + '-' + dui_digits[8:] if len(dui_digits) == 9 else dui_digits
             if dui_input and (not dui_input.isdigit() or len(dui_input) > 9):
@@ -188,7 +190,7 @@ def crear_miembro(id_distrito=None, id_grupo=None):
 
         with col2:
             # Teléfono: formato 9999-9999
-            telefono_input = st.text_input("📞 Número de Teléfono")
+            telefono_input = st.text_input("📞 Número de Teléfono", disabled=solo_lectura)
             telefono_digits = ''.join(filter(str.isdigit, telefono_input))[:8]
             num_telefono = telefono_digits[:4] + '-' + telefono_digits[4:] if len(telefono_digits) > 4 else telefono_digits
             if telefono_input and (len(telefono_digits) != 8 or not telefono_input.replace('-', '').isdigit()):
@@ -198,13 +200,13 @@ def crear_miembro(id_distrito=None, id_grupo=None):
 
             # Selector de Grupo
             grupos_dict = {g['Nombre']: g['Id_grupo'] for g in grupos}
-            grupo_nombre = st.selectbox("👥 Grupo", list(grupos_dict.keys()))
+            grupo_nombre = st.selectbox("👥 Grupo", list(grupos_dict.keys()), disabled=solo_lectura)
             grupo_id = grupos_dict[grupo_nombre]
             
         # Dirección
-        direccion = st.text_area("🏠 Dirección Completa")
+        direccion = st.text_area("🏠 Dirección Completa", disabled=solo_lectura)
         
-        if st.button("✅ Registrar Miembro", type="primary"):
+        if st.button("✅ Registrar Miembro", type="primary", disabled=solo_lectura):
             # Validación de campos obligatorios
             if not nombre or not dui or not num_telefono or not direccion:
                 st.warning("⚠️ Completa todos los campos obligatorios.")
@@ -250,6 +252,7 @@ def registrar_beneficiario(id_grupo=None):
     import streamlit as st
     from modulos.config.conexion import obtener_conexion
     
+    solo_lectura = es_administradora()
     st.subheader("👥 Registro de Beneficiarios")
     
     conexion = obtener_conexion()
@@ -278,7 +281,7 @@ def registrar_beneficiario(id_grupo=None):
         with col1:
             # Selector de Distrito
             distritos_dict = {d['nombre_distrito']: d['distrito_id'] for d in distritos}
-            distrito_nombre = st.selectbox("🏘️ Distrito", list(distritos_dict.keys()))
+            distrito_nombre = st.selectbox("🏘️ Distrito", list(distritos_dict.keys()), disabled=solo_lectura)
             distrito_id = distritos_dict[distrito_nombre]
         
         # Obtener grupos del distrito seleccionado
@@ -292,15 +295,15 @@ def registrar_beneficiario(id_grupo=None):
             else:
                 # Selector de Grupo
                 grupos_dict = {g['Nombre']: g['Id_grupo'] for g in grupos}
-                grupo_nombre = st.selectbox("👥 Grupo", list(grupos_dict.keys()))
+                grupo_nombre = st.selectbox("👥 Grupo", list(grupos_dict.keys()), disabled=solo_lectura)
                 grupo_id = grupos_dict[grupo_nombre]
         
         # Campos del beneficiario
-        nombre = st.text_input("👤 Nombre completo del beneficiario")
-        correo = st.text_input("📧 Correo electrónico")
-        contrasena = st.text_input("🔒 Contraseña", type="password")
+        nombre = st.text_input("👤 Nombre completo del beneficiario", disabled=solo_lectura)
+        correo = st.text_input("📧 Correo electrónico", disabled=solo_lectura)
+        contrasena = st.text_input("🔒 Contraseña", type="password", disabled=solo_lectura)
 
-        if st.button("✅ Registrar beneficiario", type="primary"):
+        if st.button("✅ Registrar beneficiario", type="primary", disabled=solo_lectura):
             if not nombre or not correo or not contrasena:
                 st.warning("⚠️ Completa todos los campos.")
                 return

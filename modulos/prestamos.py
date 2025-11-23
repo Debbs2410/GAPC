@@ -1,8 +1,29 @@
+import pandas as pd
+
+def obtener_datos_cartera_mora(id_grupo):
+    from modulos.config.conexion import obtener_conexion
+    conexion = obtener_conexion()
+    if not conexion:
+        return None
+    cursor = conexion.cursor(dictionary=True)
+    # Cartera de préstamos y mora por grupo
+    cursor.execute('''
+        SELECT p.Id_prestamo, m.nombre as Miembro, p.Monto_total, p.Estado
+        FROM Prestamos p
+        LEFT JOIN Miembros m ON p.Id_miembro = m.id
+        WHERE p.Id_grupo = %s
+    ''', (id_grupo,))
+    rows = cursor.fetchall()
+    conexion.close()
+    if rows:
+        return pd.DataFrame(rows)
+    return None
 """
 Módulo de Gestión de Préstamos
 Permite a los miembros solicitar préstamos basados en sus ahorros acumulados
 """
 import streamlit as st
+from modulos.solo_lectura import es_administradora
 import pandas as pd
 from datetime import datetime, timedelta
 from modulos.config.conexion import obtener_conexion
@@ -10,6 +31,8 @@ from modulos.config.conexion import obtener_conexion
 def gestionar_prestamos(id_distrito=None, id_grupo=None):
     """Función principal del módulo de préstamos. Si se proporciona id_distrito o id_grupo, filtra por ese contexto."""
     st.title("💰 Gestión de Préstamos")
+    # Solo lectura para administradora
+    solo_lectura = es_administradora()
     # Verificar autenticación
     if 'usuario' not in st.session_state:
         st.error("⛔ Debes iniciar sesión primero")
@@ -23,15 +46,15 @@ def gestionar_prestamos(id_distrito=None, id_grupo=None):
         "⚙️ Configuración"
     ])
     with tab1:
-        solicitar_prestamo(id_distrito=id_distrito, id_grupo=id_grupo)
+        solicitar_prestamo(id_distrito=id_distrito, id_grupo=id_grupo, solo_lectura=solo_lectura)
     with tab2:
         ver_prestamos(id_distrito=id_distrito, id_grupo=id_grupo)
     with tab3:
-        registrar_pago_prestamo(id_distrito=id_distrito, id_grupo=id_grupo)
+        registrar_pago_prestamo(id_distrito=id_distrito, id_grupo=id_grupo, solo_lectura=solo_lectura)
     with tab4:
         reportes_prestamos(id_distrito=id_distrito, id_grupo=id_grupo)
     with tab5:
-        configurar_prestamos(id_distrito=id_distrito, id_grupo=id_grupo)
+        configurar_prestamos(id_distrito=id_distrito, id_grupo=id_grupo, solo_lectura=solo_lectura)
 
 def obtener_ahorro_disponible(id_miembro, id_ciclo):
     """Calcula el monto total ahorrado menos los préstamos activos"""
@@ -74,13 +97,14 @@ def obtener_ahorro_disponible(id_miembro, id_ciclo):
         cursor.close()
         conexion.close()
 
-def solicitar_prestamo(id_distrito=None, id_grupo=None):
+def solicitar_prestamo(id_distrito=None, id_grupo=None, solo_lectura=False):
     """Registrar un nuevo préstamo"""
     st.header("📝 Solicitar Préstamo")
-    
+    if solo_lectura:
+        st.info("🔒 La administradora solo puede ver los préstamos y reportes. No puede solicitar préstamos.")
+        return
     conexion = obtener_conexion()
     cursor = conexion.cursor(dictionary=True)
-    
     try:
         # Obtener ciclos activos (filtrados por distrito si corresponde)
         if id_distrito is not None:
@@ -155,15 +179,30 @@ def solicitar_prestamo(id_distrito=None, id_grupo=None):
             ORDER BY nombre
         """, (id_grupo,))
         miembros = cursor.fetchall()
-        
         if not miembros:
             st.warning("⚠️ No hay miembros en este grupo")
             return
-        
-        miembro_opciones = {m['nombre']: m['id'] for m in miembros}
+
+        # Filtrar miembros que NO tienen préstamos activos (Pendiente o Vencido) en este ciclo y grupo
+        miembros_disponibles = []
+        for m in miembros:
+            cursor.execute("""
+                SELECT COUNT(*) as tiene_activo
+                FROM Prestamos
+                WHERE Id_miembro = %s AND Id_grupo = %s AND Id_Ciclo = %s AND Estado IN ('Pendiente', 'Vencido')
+            """, (m['id'], id_grupo, id_ciclo))
+            tiene_activo = cursor.fetchone()['tiene_activo']
+            if tiene_activo == 0:
+                miembros_disponibles.append(m)
+
+        if not miembros_disponibles:
+            st.warning("⚠️ Todos los miembros de este grupo ya tienen un préstamo en curso. No pueden solicitar otro hasta pagar el actual.")
+            return
+
+        miembro_opciones = {m['nombre']: m['id'] for m in miembros_disponibles}
         miembro_seleccionado = st.selectbox("Selecciona el Miembro", options=list(miembro_opciones.keys()))
         id_miembro = miembro_opciones[miembro_seleccionado]
-        
+
         # Obtener ahorro disponible
         saldo = obtener_ahorro_disponible(id_miembro, id_ciclo)
         
@@ -282,9 +321,18 @@ def solicitar_prestamo(id_distrito=None, id_grupo=None):
         
         # Botón de registro
         if st.button("💰 Aprobar y Registrar Préstamo", type="primary", use_container_width=True):
+            # Validar de nuevo que el miembro no tenga préstamo activo (por si cambia el estado en paralelo)
+            cursor.execute("""
+                SELECT COUNT(*) as tiene_activo
+                FROM Prestamos
+                WHERE Id_miembro = %s AND Id_grupo = %s AND Id_Ciclo = %s AND Estado IN ('Pendiente', 'Vencido')
+            """, (id_miembro, id_grupo, id_ciclo))
+            tiene_activo = cursor.fetchone()['tiene_activo']
+            if tiene_activo > 0:
+                st.error("❌ Este miembro ya tiene un préstamo en curso y no puede solicitar otro hasta pagarlo.")
+                return
             try:
                 usuario_id = st.session_state.usuario['Id_usuario']
-                
                 cursor.execute("""
                     INSERT INTO Prestamos 
                     (Id_miembro, Id_grupo, Id_Ciclo, Monto_prestado, Monto_disponible_ahorro,
@@ -298,13 +346,11 @@ def solicitar_prestamo(id_distrito=None, id_grupo=None):
                     fecha_vencimiento, forma_pago, numero_cuotas, monto_cuota,
                     descripcion, usuario_id
                 ))
-                
                 conexion.commit()
                 st.success(f"✅ Préstamo aprobado y registrado exitosamente")
                 st.balloons()
                 st.info(f"💡 El miembro **{miembro_seleccionado}** debe pagar **${monto_total:.2f}** antes del **{fecha_vencimiento.strftime('%d/%m/%Y')}**")
                 st.rerun()
-                
             except Exception as e:
                 conexion.rollback()
                 st.error(f"❌ Error al registrar el préstamo: {str(e)}")
@@ -448,7 +494,7 @@ def ver_prestamos(id_distrito=None, id_grupo=None):
                     st.write(f"**Saldo Pendiente:** ${prestamo['Saldo_Pendiente']:.2f}")
                     
                     progreso = (float(prestamo['Total_Pagado']) / float(prestamo['Monto_total']) * 100) if float(prestamo['Monto_total']) > 0 else 0
-                    st.progress(float(progreso) / 100)
+                    st.progress(min(float(progreso) / 100, 1.0))
                     st.write(f"**Progreso:** {progreso:.1f}%")
                 
                 col3, col4 = st.columns(2)
@@ -492,13 +538,14 @@ def ver_prestamos(id_distrito=None, id_grupo=None):
         cursor.close()
         conexion.close()
 
-def registrar_pago_prestamo(id_distrito=None, id_grupo=None):
+def registrar_pago_prestamo(id_distrito=None, id_grupo=None, solo_lectura=False):
     """Registrar pago de un préstamo"""
     st.header("💵 Registrar Pago de Préstamo")
-    
+    if solo_lectura:
+        st.info("🔒 La administradora solo puede ver los préstamos y reportes. No puede registrar pagos de préstamos.")
+        return
     conexion = obtener_conexion()
     cursor = conexion.cursor(dictionary=True)
-    
     try:
         # Obtener préstamos pendientes (filtrados por distrito si corresponde)
         if id_distrito is not None:
@@ -547,9 +594,35 @@ def registrar_pago_prestamo(id_distrito=None, id_grupo=None):
         
         # Obtener detalles del préstamo
         prestamo = next(p for p in prestamos_pendientes if p['Id_prestamo'] == id_prestamo)
-        
+
+        # Calcular mora automática como porcentaje semanal configurable por grupo
+        mora_valor = 0.0
+        if prestamo['Id_grupo']:
+            cursor.execute("SELECT mora_valor FROM Grupos WHERE Id_grupo = %s", (prestamo['Id_grupo'],))
+            grupo = cursor.fetchone()
+            if grupo and grupo['mora_valor'] is not None:
+                mora_valor = float(grupo['mora_valor'])
+
+        mora = 0.0
+        dias_vencido = 0
+        semanas_vencidas = 0
+        fecha_pago_preview = datetime.now().date()
+        if 'fecha_pago' in locals():
+            if isinstance(fecha_pago, datetime):
+                fecha_pago_preview = fecha_pago.date()
+            else:
+                fecha_pago_preview = fecha_pago
+        saldo_pendiente = float(prestamo['Saldo_Pendiente'])
+        if prestamo['Fecha_vencimiento'] and prestamo['Estado'] in ('Pendiente', 'Vencido'):
+            dias_vencido = (prestamo['Fecha_vencimiento'] - fecha_pago_preview).days
+            if dias_vencido < 0:
+                semanas_vencidas = abs(dias_vencido) // 7 + (1 if abs(dias_vencido) % 7 > 0 else 0)
+                mora = saldo_pendiente * (mora_valor / 100) * semanas_vencidas
+
+        total_con_mora = saldo_pendiente + mora
+
         st.divider()
-        
+
         # Información del préstamo
         col1, col2, col3, col4 = st.columns(4)
         with col1:
@@ -567,12 +640,15 @@ def registrar_pago_prestamo(id_distrito=None, id_grupo=None):
                 """, (id_prestamo,))
                 cuotas_pagadas = cursor.fetchone()['cuotas_pagadas']
                 st.metric("📊 Cuotas", f"{cuotas_pagadas}/{prestamo['Numero_cuotas']}")
-        
+
+        if mora > 0:
+            st.warning(f"⚠️ Este préstamo tiene pagos atrasados. Se aplican ${mora:.2f} de multa por mora.")
+
         st.divider()
         
         # Formulario de pago
         col1, col2 = st.columns(2)
-        
+
         with col1:
             # Calcular número de cuota
             cursor.execute("""
@@ -581,7 +657,7 @@ def registrar_pago_prestamo(id_distrito=None, id_grupo=None):
                 WHERE Id_prestamo = %s
             """, (id_prestamo,))
             siguiente_cuota = cursor.fetchone()['siguiente_cuota']
-            
+
             if prestamo['Numero_cuotas'] > 1:
                 numero_cuota = st.number_input(
                     "Número de Cuota",
@@ -595,63 +671,95 @@ def registrar_pago_prestamo(id_distrito=None, id_grupo=None):
                 numero_cuota = 1
                 st.info("**Pago Único**")
                 monto_sugerido = prestamo['Saldo_Pendiente']
-            
+
+            if mora > 0:
+                label_pago = f"Monto del Pago con mora (${float(monto_sugerido) + float(mora):.2f})"
+            else:
+                label_pago = f"Monto del Pago (${float(monto_sugerido):.2f})"
             monto_pago = st.number_input(
-                "Monto del Pago ($)",
+                label_pago,
                 min_value=0.01,
-                max_value=float(prestamo['Saldo_Pendiente']),
-                value=min(float(monto_sugerido), float(prestamo['Saldo_Pendiente'])),
-                step=0.50
+                max_value=float(total_con_mora),
+                value=min(float(monto_sugerido) + float(mora), float(total_con_mora)),
+                step=0.50,
+                key=f"monto_pago_{id_prestamo}_{numero_cuota}"
             )
-        
+
         with col2:
             fecha_pago = st.date_input(
                 "Fecha del Pago",
                 value=datetime.now()
             )
-            
+
             metodo_pago = st.selectbox(
                 "Método de Pago",
                 options=["Efectivo", "Transferencia", "Descuento_Ahorro"],
                 help="Forma en que se recibe el pago"
             )
-        
+
+        # --- Recalcular mora y total a pagar según la fecha seleccionada ---
+        mora = 0.0
+        dias_vencido = 0
+        semanas_vencidas = 0
+        fecha_pago_preview = fecha_pago.date() if isinstance(fecha_pago, datetime) else fecha_pago
+        saldo_pendiente = float(prestamo['Saldo_Pendiente'])
+        if prestamo['Fecha_vencimiento'] and prestamo['Estado'] in ('Pendiente', 'Vencido'):
+            dias_vencido = (prestamo['Fecha_vencimiento'] - fecha_pago_preview).days
+            if dias_vencido < 0:
+                semanas_vencidas = abs(dias_vencido) // 7 + (1 if abs(dias_vencido) % 7 > 0 else 0)
+                mora = saldo_pendiente * (mora_valor / 100) * semanas_vencidas
+        total_con_mora = saldo_pendiente + mora
+
+        # Actualizar label y valor sugerido
+        if mora > 0:
+            label_pago = f"Monto del Pago con mora (${float(monto_sugerido) + float(mora):.2f})"
+        else:
+            label_pago = f"Monto del Pago (${float(monto_sugerido):.2f})"
+        monto_pago = st.number_input(
+            label_pago,
+            min_value=0.01,
+            max_value=float(total_con_mora),
+            value=min(float(monto_sugerido) + float(mora), float(total_con_mora)),
+            step=0.50,
+            key=f"monto_pago_{id_prestamo}_{numero_cuota}_preview"
+        )
+
         observaciones = st.text_area(
             "Observaciones",
             placeholder="Notas adicionales sobre el pago (opcional)"
         )
-        
+
         # Validación
-        if monto_pago > prestamo['Saldo_Pendiente']:
-            st.error(f"❌ El monto del pago (${monto_pago:.2f}) no puede ser mayor al saldo pendiente (${prestamo['Saldo_Pendiente']:.2f})")
+        if monto_pago > total_con_mora:
+            st.error(f"❌ El monto del pago (${monto_pago:.2f}) no puede ser mayor al saldo pendiente + mora (${total_con_mora:.2f})")
             return
-        
+
         # Calcular nuevo saldo (convertir ambos a float)
-        nuevo_saldo = float(prestamo['Saldo_Pendiente']) - float(monto_pago)
-        
+        nuevo_saldo = float(total_con_mora) - float(monto_pago)
+
         col1, col2 = st.columns(2)
         with col1:
-            st.info(f"💵 **Monto a Pagar:** ${float(monto_pago):.2f}")
+            st.info(f"💵 **Monto a Pagar (incluye mora si aplica):** ${float(monto_pago):.2f}")
         with col2:
             st.info(f"⏳ **Nuevo Saldo:** ${nuevo_saldo:.2f}")
-        
+
         if nuevo_saldo == 0:
-            st.success("✅ Este pago liquidará completamente el préstamo")
-        
+            st.success("✅ Este pago liquidará completamente el préstamo y la mora")
+
         st.divider()
-        
+
         # Botón de registro
         if st.button("💳 Registrar Pago", type="primary", use_container_width=True):
             try:
                 usuario_id = st.session_state.usuario['Id_usuario']
-                
+
                 # Insertar pago
                 cursor.execute("""
                     INSERT INTO Pagos_Prestamos 
                     (Id_prestamo, Numero_cuota, Monto_pagado, Fecha_pago, Metodo_pago, Observaciones, Registrado_por)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """, (id_prestamo, numero_cuota, monto_pago, fecha_pago, metodo_pago, observaciones, usuario_id))
-                
+
                 # Actualizar estado del préstamo si está completamente pagado
                 if nuevo_saldo == 0:
                     cursor.execute("""
@@ -659,22 +767,22 @@ def registrar_pago_prestamo(id_distrito=None, id_grupo=None):
                         SET Estado = 'Pagado'
                         WHERE Id_prestamo = %s
                     """, (id_prestamo,))
-                
+
                 conexion.commit()
                 st.success(f"✅ Pago registrado exitosamente")
-                
+
                 if nuevo_saldo == 0:
                     st.balloons()
                     st.success(f"🎉 ¡Préstamo completamente pagado!")
                 else:
                     st.info(f"💡 Saldo restante: **${nuevo_saldo:.2f}**")
-                
+
                 st.rerun()
-                
+
             except Exception as e:
                 conexion.rollback()
                 st.error(f"❌ Error al registrar el pago: {str(e)}")
-    
+
     finally:
         cursor.close()
         conexion.close()
@@ -848,48 +956,75 @@ def reportes_prestamos(id_distrito=None, id_grupo=None):
         cursor.close()
         conexion.close()
 
-def configurar_prestamos(id_distrito=None, id_grupo=None):
-     """Configuración del sistema de préstamos"""
-     st.header("⚙️ Configuración de Préstamos")
-    
-     st.info("🔧 Esta sección permite configurar las políticas de préstamos del sistema")
-    
-     st.subheader("📋 Reglas Actuales")
-    
-     st.write("""
-     ### 🎯 Políticas de Préstamos
-    
-     1. **Monto Máximo de Préstamo:**
-         - Los miembros solo pueden pedir prestado hasta el monto que tienen ahorrado
-         - El sistema verifica automáticamente el saldo disponible
-         - Se descuentan los préstamos activos del saldo disponible
-    
-     2. **Requisitos:**
-         - Tener ahorros activos en el ciclo actual
-         - No tener préstamos vencidos sin pagar
-         - El monto del préstamo no puede exceder el ahorro disponible
-    
-     3. **Tasas de Interés:**
-         - Configurable por préstamo
-         - Se calcula sobre el monto prestado
-         - El interés se suma al total a pagar
-    
-     4. **Formas de Pago:**
-         - **Pago Único:** Un solo pago al vencimiento
-         - **Cuotas:** Pagos distribuidos en varias cuotas
-    
-     5. **Estados de Préstamos:**
-         - **Pendiente:** Préstamo activo con saldo por pagar
-         - **Pagado:** Préstamo completamente liquidado
-         - **Vencido:** Préstamo con fecha de vencimiento pasada
-     """)
-    
-     st.divider()
-    
-     st.subheader("💡 Recomendaciones")
-     st.write("""
-     - Establecer una tasa de interés razonable (5-10% es común)
-     - Definir plazos realistas según la capacidad de pago
-     - Hacer seguimiento regular de los préstamos vencidos
-     - Promover el ahorro constante para aumentar la capacidad de préstamo
-     """)
+def configurar_prestamos(id_distrito=None, id_grupo=None, solo_lectura=False):
+    # --- Configuración editable de mora por grupo ---
+    conexion = obtener_conexion()
+    cursor = conexion.cursor(dictionary=True)
+    try:
+        if id_grupo:
+            cursor.execute("SELECT mora_valor FROM Grupos WHERE Id_grupo = %s", (id_grupo,))
+            mora_config = cursor.fetchone()
+        else:
+            mora_config = None
+    finally:
+        cursor.close()
+        conexion.close()
+
+    st.header("⚙️ Configuración de Préstamos")
+    st.info("🔧 Esta sección permite configurar las políticas de préstamos del sistema")
+    st.subheader("📋 Reglas Actuales")
+    st.write("""
+    ### 🎯 Políticas de Préstamos
+
+    1. **Monto Máximo de Préstamo:**
+        - Los miembros solo pueden pedir prestado hasta el monto que tienen ahorrado
+        - El sistema verifica automáticamente el saldo disponible
+        - Se descuentan los préstamos activos del saldo disponible
+
+    2. **Requisitos:**
+        - Tener ahorros activos en el ciclo actual
+        - No tener préstamos vencidos sin pagar
+        - El monto del préstamo no puede exceder el ahorro disponible
+
+    3. **Tasas de Interés:**
+        - Configurable por préstamo
+        - Se calcula sobre el monto prestado
+        - El interés se suma al total a pagar
+
+    4. **Formas de Pago:**
+        - **Pago Único:** Un solo pago al vencimiento
+        - **Cuotas:** Pagos distribuidos en varias cuotas
+
+    5. **Estados de Préstamos:**
+        - **Pendiente:** Préstamo activo con saldo por pagar
+        - **Pagado:** Préstamo completamente liquidado
+        - **Vencido:** Préstamo con fecha de vencimiento pasada
+    """)
+    st.divider()
+    st.subheader("⚡ Configuración de Mora por Grupo")
+    from modulos.solo_lectura import es_administradora
+    solo_lectura = es_administradora()
+    mora_valor = st.number_input(
+        "Porcentaje de mora semanal (%)",
+        min_value=0.0,
+        value=float(mora_config['mora_valor']) if mora_config and mora_config['mora_valor'] is not None else 2.0,
+        step=0.1,
+        help="Porcentaje semanal que se aplicará como multa sobre el saldo pendiente por cada semana de atraso",
+        disabled=solo_lectura
+    )
+    if st.button("Guardar configuración de mora", use_container_width=True, disabled=solo_lectura):
+        conexion = obtener_conexion()
+        cursor = conexion.cursor()
+        try:
+            cursor.execute(
+                "UPDATE Grupos SET mora_valor = %s WHERE Id_grupo = %s",
+                (mora_valor, id_grupo)
+            )
+            conexion.commit()
+            st.success("Configuración de mora guardada correctamente.")
+        except Exception as e:
+            conexion.rollback()
+            st.error(f"Error al guardar configuración: {e}")
+        finally:
+            cursor.close()
+            conexion.close()

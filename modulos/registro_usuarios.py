@@ -1,4 +1,5 @@
 import streamlit as st
+from modulos.solo_lectura import es_administradora
 from modulos.config.conexion import obtener_conexion
 # hashlib ya no es necesario
 
@@ -8,9 +9,11 @@ def registrar_usuario():
     nombre = st.text_input("Nombre completo")
     correo = st.text_input("Correo electrónico")
     contrasena = st.text_input("Contraseña", type="password")
+
     rol = st.selectbox("Rol", ["Administradora", "Promotora", "Directiva"])
     id_grupo = None
     Id_distrito = 0
+    rol_directiva = None
 
     # Si es Promotora, pedir distrito
     if rol == "Promotora":
@@ -30,6 +33,7 @@ def registrar_usuario():
             Id_distrito = st.number_input("ID de Distrito (escribe el número)", min_value=1, step=1)
 
     # Si es Directiva, pedir solo grupo y obtener distrito automáticamente (sin mostrar selección de distrito)
+
     if rol == "Directiva":
         conexion_tmp = obtener_conexion()
         grupos_opciones = []
@@ -53,6 +57,8 @@ def registrar_usuario():
                     if grupo_row and grupo_row['distrito_id']:
                         Id_distrito = grupo_row['distrito_id']
                     conexion_tmp.close()
+        # El distrito se asume automáticamente del grupo, no se muestra al usuario
+        rol_directiva = st.selectbox("Rol de directiva", ["Presidenta", "Secretaria", "Tesorero"])
         
     if st.button("Registrar usuario"):
         # Validación de campos obligatorios según rol
@@ -90,12 +96,15 @@ def registrar_usuario():
                 conexion.close()
                 return
 
+
         elif rol == "Directiva":
-            # Validar que solo exista 1 Directiva por grupo
-            cursor.execute("SELECT COUNT(*) AS total FROM Usuarios WHERE rol = 'Directiva' AND id_grupo = %s", (id_grupo,))
+            # Validar que no exista ya ese rol de directiva para el grupo en Usuarios
+            cursor.execute("""
+                SELECT COUNT(*) AS total FROM Usuarios WHERE Id_grupo = %s AND Rol_Directiva = %s
+            """, (id_grupo, rol_directiva))
             total_dir = cursor.fetchone()["total"]
             if total_dir >= 1:
-                st.error(f"❌ Ya existe una directiva registrada para el grupo {id_grupo}.")
+                st.error(f"❌ Ya existe una persona registrada como {rol_directiva} para el grupo {id_grupo}.")
                 conexion.close()
                 return
 
@@ -108,11 +117,12 @@ def registrar_usuario():
                 """
                 cursor.execute(sql, (nombre, correo, contrasena_plana, rol, Id_distrito))
             elif rol == "Directiva":
+                # Insertar usuario con Rol_Directiva
                 sql = """
-                INSERT INTO Usuarios (Nombre_Usuario, Correo, Contraseña, Rol, Id_grupo, Id_distrito)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO Usuarios (Nombre_Usuario, Correo, Contraseña, Rol, Id_grupo, Id_distrito, Rol_Directiva)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """
-                cursor.execute(sql, (nombre, correo, contrasena_plana, rol, id_grupo, Id_distrito))
+                cursor.execute(sql, (nombre, correo, contrasena_plana, rol, id_grupo, Id_distrito, rol_directiva))
             else:  # Administradora
                 sql = """
                 INSERT INTO Usuarios (Nombre_Usuario, Correo, Contraseña, Rol)

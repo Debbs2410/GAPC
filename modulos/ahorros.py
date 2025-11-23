@@ -1,4 +1,5 @@
 import streamlit as st
+from modulos.solo_lectura import es_administradora
 from modulos.config.conexion import obtener_conexion
 import pandas as pd
 from datetime import datetime, date
@@ -13,6 +14,8 @@ def gestionar_ahorros(id_distrito=None, id_grupo=None):
     st.title("💰 Gestión de Ahorros")
     st.info("💡 Los miembros pueden realizar ahorros en cada reunión. "
             "Al finalizar el ciclo, se les devolverá el total ahorrado.")
+    # Solo lectura para administradora
+    solo_lectura = es_administradora()
     # Filtro global de ciclo
     conexion = obtener_conexion()
     if not conexion:
@@ -64,18 +67,27 @@ def gestionar_ahorros(id_distrito=None, id_grupo=None):
         "⚙️ Configuración"
     ])
     with tab1:
-        registrar_ahorro(id_ciclo_global, id_distrito=id_distrito)
+        if not solo_lectura:
+            registrar_ahorro(id_ciclo_global, id_distrito=id_distrito, solo_lectura=solo_lectura)
+        else:
+            st.info("Solo lectura: la administradora no puede registrar ahorros.")
     with tab2:
         ver_ahorros(id_ciclo_global, id_distrito=id_distrito, id_grupo=id_grupo)
     with tab3:
         reportes_ahorros(id_ciclo_global, id_distrito=id_distrito)
     with tab4:
-        devolver_ahorros(id_ciclo_global, id_distrito=id_distrito)
+        if not solo_lectura:
+            devolver_ahorros(id_ciclo_global, id_distrito=id_distrito, solo_lectura=solo_lectura)
+        else:
+            st.info("Solo lectura: la administradora no puede devolver ahorros.")
     with tab5:
-        configurar_monto_minimo(id_ciclo_global, id_distrito=id_distrito)
+        if not solo_lectura:
+            configurar_monto_minimo(id_ciclo_global, id_distrito=id_distrito, solo_lectura=solo_lectura)
+        else:
+            st.info("Solo lectura: la administradora no puede modificar la configuración de ahorros.")
 
 
-def registrar_ahorro(id_ciclo_filtro, id_distrito=None):
+def registrar_ahorro(id_ciclo_filtro, id_distrito=None, solo_lectura=False):
     """
     Registrar ahorros de miembros en una reunión específica para el ciclo seleccionado.
     """
@@ -144,7 +156,7 @@ def registrar_ahorro(id_ciclo_filtro, id_distrito=None):
             f"{r['Nombre_Grupo']} - Semana {r['Numero_semana']} ({r['Fecha_reunion']})": r['Id_reunion']
             for r in reuniones
         }
-        reunion_sel = st.selectbox("🔍 Seleccionar Reunión", list(reuniones_dict.keys()), key=f"reunion_{id_ciclo_filtro}")
+        reunion_sel = st.selectbox("🔍 Seleccionar Reunión", list(reuniones_dict.keys()), key=f"reunion_{id_ciclo_filtro}", disabled=solo_lectura)
         id_reunion = reuniones_dict[reunion_sel]
         # Obtener datos de la reunión seleccionada
         reunion = next(r for r in reuniones if r['Id_reunion'] == id_reunion)
@@ -212,7 +224,8 @@ def registrar_ahorro(id_ciclo_filtro, id_distrito=None):
                         format="%.2f",
                         key=f"monto_{miembro['id']}_{id_reunion}",
                         label_visibility="collapsed",
-                        help=f"Monto mínimo requerido: ${monto_minimo:.2f}"
+                        help=f"Monto mínimo requerido: ${monto_minimo:.2f}",
+                        disabled=solo_lectura
                     )
                     if monto > 0 and monto < monto_minimo and aplica_multa:
                         st.warning(f"⚠️ Multa: ${monto_multa:.2f}", icon="⚠️")
@@ -225,7 +238,8 @@ def registrar_ahorro(id_ciclo_filtro, id_distrito=None):
                         value=obs_default,
                         key=f"obs_{miembro['id']}_{id_reunion}",
                         label_visibility="collapsed",
-                        placeholder="Observaciones (opcional)..."
+                        placeholder="Observaciones (opcional)...",
+                        disabled=solo_lectura
                     )
                 ahorros_nuevos.append({
                     'id_miembro': miembro['id'],
@@ -253,7 +267,7 @@ def registrar_ahorro(id_ciclo_filtro, id_distrito=None):
         st.divider()
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
-            if st.button("💾 Guardar Ahorros", type="primary", use_container_width=True, key=f"guardar_{id_reunion}"):
+            if st.button("💾 Guardar Ahorros", type="primary", use_container_width=True, key=f"guardar_{id_reunion}", disabled=solo_lectura):
                 try:
                     usuario_id = st.session_state.get('usuario', {}).get('Id_usuario')
                     registros_guardados = 0
@@ -293,8 +307,8 @@ def registrar_ahorro(id_ciclo_filtro, id_distrito=None):
         with col_btn2:
             if aplica_multa and no_cumplen_minimo > 0:
                 st.write(f"**Aplicar multas automáticas**")
-                aplicar_multas_ahorro = st.checkbox(f"Multar a {no_cumplen_minimo} miembro(s) que no cumplen el mínimo", value=True, key=f"multas_{id_reunion}")
-                if st.button("⚠️ Aplicar Multas", type="secondary", use_container_width=True, disabled=not aplicar_multas_ahorro, key=f"aplicar_multas_{id_reunion}"):
+                aplicar_multas_ahorro = st.checkbox(f"Multar a {no_cumplen_minimo} miembro(s) que no cumplen el mínimo", value=True, key=f"multas_{id_reunion}", disabled=solo_lectura)
+                if st.button("⚠️ Aplicar Multas", type="secondary", use_container_width=True, disabled=not aplicar_multas_ahorro or solo_lectura, key=f"aplicar_multas_{id_reunion}"):
                     try:
                         usuario_id = st.session_state.get('usuario', {}).get('Id_usuario')
                         multas_aplicadas = 0
@@ -338,7 +352,7 @@ def registrar_ahorro(id_ciclo_filtro, id_distrito=None):
         conexion.close()
 
 
-def configurar_monto_minimo(id_ciclo_filtro=None, id_distrito=None, id_grupo=None):
+def configurar_monto_minimo(id_ciclo_filtro=None, id_distrito=None, id_grupo=None, solo_lectura=False):
     """
     Configuración del monto mínimo de ahorro requerido.
     """
@@ -381,13 +395,15 @@ def configurar_monto_minimo(id_ciclo_filtro=None, id_distrito=None, id_grupo=Non
                     value=float(config['Monto_minimo']),
                     step=0.50,
                     format="%.2f",
-                    help="Cantidad mínima que cada miembro debe ahorrar en cada reunión"
+                    help="Cantidad mínima que cada miembro debe ahorrar en cada reunión",
+                    disabled=solo_lectura
                 )
                 
                 aplica_multa = st.checkbox(
                     "⚠️ Aplicar multa automática si no cumple el mínimo",
                     value=bool(config['Aplica_multa']),
-                    help="Si está activado, se aplicará una multa a los miembros que no ahorren el mínimo"
+                    help="Si está activado, se aplicará una multa a los miembros que no ahorren el mínimo",
+                    disabled=solo_lectura
                 )
             
             with col2:
@@ -397,7 +413,7 @@ def configurar_monto_minimo(id_ciclo_filtro=None, id_distrito=None, id_grupo=Non
                     value=float(config['Monto_multa']),
                     step=0.50,
                     format="%.2f",
-                    disabled=not aplica_multa,
+                    disabled=not aplica_multa or solo_lectura,
                     help="Cantidad a multar si no se cumple el monto mínimo"
                 )
                 
@@ -415,7 +431,8 @@ def configurar_monto_minimo(id_ciclo_filtro=None, id_distrito=None, id_grupo=Non
                 "📝 Descripción/Notas",
                 value=config.get('Descripcion', ''),
                 placeholder="Ej: Acuerdo establecido en reunión del 01/01/2025",
-                height=80
+                height=80,
+                disabled=solo_lectura
             )
             
             st.divider()
@@ -441,9 +458,9 @@ def configurar_monto_minimo(id_ciclo_filtro=None, id_distrito=None, id_grupo=Non
                           f"Miembro ahorra: ${monto_minimo:.2f}\n\n"
                           f"Resultado: ✅ Cumple mínimo")
             
-            submitted = st.form_submit_button("💾 Guardar Configuración", type="primary")
+            submitted = st.form_submit_button("💾 Guardar Configuración", type="primary", disabled=solo_lectura)
             
-            if submitted:
+            if submitted and not solo_lectura:
                 try:
                     # Solo hay una configuración global, actualizar o insertar
                     cursor.execute("SELECT Id_config FROM Configuracion_Ahorros LIMIT 1")
@@ -790,7 +807,7 @@ def reportes_ahorros(id_ciclo_filtro=None, id_distrito=None):
         conexion.close()
 
 
-def devolver_ahorros(id_ciclo, id_distrito=None):
+def devolver_ahorros(id_ciclo, id_distrito=None, solo_lectura=False):
     """
     Proceso para devolver ahorros al final del ciclo seleccionado.
     """
@@ -876,9 +893,9 @@ def devolver_ahorros(id_ciclo, id_distrito=None):
                 for ma in miembros_ahorros
             }
             if miembros_dict:
-                miembro_sel = st.selectbox("Seleccionar miembro", list(miembros_dict.keys()), key=f"dev_ind_{id_ciclo}")
+                miembro_sel = st.selectbox("Seleccionar miembro", list(miembros_dict.keys()), key=f"dev_ind_{id_ciclo}", disabled=solo_lectura)
                 id_miembro_sel = miembros_dict[miembro_sel]
-                if st.button("✅ Marcar como Devuelto", type="secondary", use_container_width=True, key=f"btn_dev_ind_{id_ciclo}"):
+                if st.button("✅ Marcar como Devuelto", type="secondary", use_container_width=True, key=f"btn_dev_ind_{id_ciclo}", disabled=solo_lectura):
                     try:
                         update_query = "UPDATE Ahorros SET Estado = 'Devuelto', Fecha_devolucion = CURDATE() WHERE Id_miembro = %s AND Id_Ciclo = %s AND Estado = 'Activo'"
                         update_params = [id_miembro_sel, id_ciclo]
@@ -896,8 +913,8 @@ def devolver_ahorros(id_ciclo, id_distrito=None):
         with col2:
             st.write("### 💸 Devolución Masiva")
             st.warning("⚠️ Esta acción marcará TODOS los ahorros del ciclo como devueltos")
-            confirmar = st.checkbox("Confirmo que todos los ahorros han sido devueltos físicamente", key=f"chk_dev_all_{id_ciclo}")
-            if st.button("✅ Devolver Todos los Ahorros", type="primary", use_container_width=True, disabled=not confirmar, key=f"btn_dev_all_{id_ciclo}"):
+            confirmar = st.checkbox("Confirmo que todos los ahorros han sido devueltos físicamente", key=f"chk_dev_all_{id_ciclo}", disabled=solo_lectura)
+            if st.button("✅ Devolver Todos los Ahorros", type="primary", use_container_width=True, disabled=not confirmar or solo_lectura, key=f"btn_dev_all_{id_ciclo}"):
                 try:
                     update_query = "UPDATE Ahorros SET Estado = 'Devuelto', Fecha_devolucion = CURDATE() WHERE Id_Ciclo = %s AND Estado = 'Activo'"
                     update_params = [id_ciclo]

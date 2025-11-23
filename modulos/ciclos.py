@@ -1,28 +1,60 @@
+import pandas as pd
+
+def obtener_datos_utilidades_ciclo(id_grupo):
+    from modulos.config.conexion import obtener_conexion
+    conexion = obtener_conexion()
+    if not conexion:
+        return None
+    cursor = conexion.cursor(dictionary=True)
+    # Utilidades del ciclo por grupo
+    cursor.execute('''
+        SELECT c.Id_Ciclo, c.Fecha_Inicio, c.Fecha_Fin, c.Ahorro_Acumulado
+        FROM Ciclo c
+        INNER JOIN Grupos g ON g.Id_Ciclo = c.Id_Ciclo
+        WHERE g.Id_grupo = %s
+        ORDER BY c.Fecha_Inicio DESC
+        LIMIT 1
+    ''', (id_grupo,))
+    rows = cursor.fetchall()
+    conexion.close()
+    if rows:
+        return pd.DataFrame(rows)
+    return None
 import streamlit as st
+from modulos.solo_lectura import es_administradora
 from modulos.config.conexion import obtener_conexion
 import pandas as pd
 from datetime import datetime, timedelta
 import datetime as dt
 
 
-def gestionar_ciclos(id_distrito=None):
+def gestionar_ciclos(id_distrito=None, id_grupo=None):
     """
     Función principal para gestionar ciclos.
     Permite crear, ver y gestionar el estado de los ciclos.
     Si se proporciona id_distrito, filtra los ciclos y operaciones por ese distrito.
     """
     st.title("Gestión de Ciclos")
+    # Solo lectura para administradora
+    solo_lectura = es_administradora()
     # Tabs para organizar las funcionalidades
-    tab1, tab2, tab3 = st.tabs(["Ver Ciclos", "Crear Ciclo", "Gestionar Estado"])
+    if not solo_lectura:
+        tab1, tab2, tab3 = st.tabs(["Ver Ciclos", "Crear Ciclo", "Gestionar Estado"])
+    else:
+        tab1, tab3 = st.tabs(["Ver Ciclos", "Gestionar Estado"])
     with tab1:
-        ver_todos_ciclos(id_distrito=id_distrito)
-    with tab2:
-        crear_ciclo(id_distrito=id_distrito)
-    with tab3:
-        gestionar_estado_ciclos(id_distrito=id_distrito)
+        ver_todos_ciclos(id_distrito=id_distrito, id_grupo=id_grupo)
+    if not solo_lectura:
+        with tab2:
+            crear_ciclo(id_distrito=id_distrito, solo_lectura=solo_lectura)
+        with tab3:
+            gestionar_estado_ciclos(id_distrito=id_distrito, id_grupo=id_grupo, solo_lectura=solo_lectura)
+    else:
+        with tab3:
+            gestionar_estado_ciclos(id_distrito=id_distrito, id_grupo=id_grupo, solo_lectura=solo_lectura)
 
 
-def ver_todos_ciclos(id_distrito=None):
+def ver_todos_ciclos(id_distrito=None, id_grupo=None):
     """
     Muestra todos los ciclos registrados en el sistema con su información completa.
     Si se proporciona id_distrito, solo muestra ciclos asociados a grupos de ese distrito.
@@ -36,9 +68,37 @@ def ver_todos_ciclos(id_distrito=None):
     
     cursor = conexion.cursor(dictionary=True)
     
+    from modulos.solo_lectura import es_administradora
+    if 'solo_lectura' not in locals() or solo_lectura is None:
+        solo_lectura = es_administradora()
+        from modulos.solo_lectura import es_administradora
+        if 'solo_lectura' not in locals() or solo_lectura is None:
+            solo_lectura = es_administradora()
     try:
         # Consulta para obtener ciclos con información adicional y el ahorro real acumulado
-        if id_distrito is not None:
+        if id_grupo is not None:
+            cursor.execute("""
+                SELECT 
+                    c.Id_Ciclo,
+                    c.Fecha_Inicio,
+                    c.Fecha_Fin,
+                    (SELECT IFNULL(SUM(Monto),0) FROM Ahorros WHERE Id_Ciclo = c.Id_Ciclo AND Estado = 'Activo') AS Ahorro_Real,
+                    c.Ahorro_Acumulado AS Ahorro_Anterior,
+                    COUNT(DISTINCT g.Id_grupo) as num_grupos,
+                    GROUP_CONCAT(DISTINCT g.Nombre SEPARATOR ', ') as grupos_nombres,
+                    DATEDIFF(c.Fecha_Fin, c.Fecha_Inicio) as duracion_dias,
+                    CASE 
+                        WHEN CURDATE() < c.Fecha_Inicio THEN 'Pendiente'
+                        WHEN CURDATE() BETWEEN c.Fecha_Inicio AND c.Fecha_Fin THEN 'Activo'
+                        WHEN CURDATE() > c.Fecha_Fin THEN 'Completado'
+                    END as estado
+                FROM Ciclo c
+                LEFT JOIN Grupos g ON g.Id_Ciclo = c.Id_Ciclo
+                WHERE g.Id_grupo = %s
+                GROUP BY c.Id_Ciclo
+                ORDER BY c.Fecha_Inicio DESC
+            """, (id_grupo,))
+        elif id_distrito is not None:
             cursor.execute("""
                 SELECT 
                     c.Id_Ciclo,
@@ -179,14 +239,16 @@ def ver_todos_ciclos(id_distrito=None):
         conexion.close()
 
 
-def crear_ciclo(id_distrito=None):
+def crear_ciclo(id_distrito=None, solo_lectura=None):
+    if solo_lectura is None:
+        from modulos.solo_lectura import es_administradora
+        solo_lectura = es_administradora()
     """
     Formulario para crear un nuevo ciclo.
     Los ciclos tienen una duración de 8 semanas (56 días).
     Si se proporciona id_distrito, solo permite asignar el ciclo a grupos de ese distrito.
     """
     st.subheader("Crear Nuevo Ciclo")
-    
     st.info("Los ciclos tienen una duración estándar de **8 semanas (56 días)**")
     
     conexion = obtener_conexion()
@@ -205,15 +267,13 @@ def crear_ciclo(id_distrito=None):
                 fecha_inicio = st.date_input(
                     "Fecha de Inicio*",
                     value=datetime.now().date(),
-                    help="Fecha en que inicia el ciclo"
+                    help="Fecha en que inicia el ciclo",
+                    disabled=solo_lectura
                 )
-                
                 # Calcular automáticamente la fecha fin (8 semanas = 56 días)
                 fecha_fin_calculada = fecha_inicio + timedelta(days=56)
-                
                 st.info(f"Fecha de Fin (calculada): **{fecha_fin_calculada}**")
                 st.write(f"Duración: **8 semanas (56 días)**")
-            
             with col2:
                 ahorro_inicial = st.number_input(
                     "Ahorro Acumulado Inicial",
@@ -221,7 +281,8 @@ def crear_ciclo(id_distrito=None):
                     value=0.0,
                     step=0.01,
                     format="%.2f",
-                    help="Monto inicial del ciclo (usualmente $0.00)"
+                    help="Monto inicial del ciclo (usualmente $0.00)",
+                    disabled=solo_lectura
                 )
             
             st.divider()
@@ -269,7 +330,8 @@ def crear_ciclo(id_distrito=None):
                 grupos_seleccionados = st.multiselect(
                     "Selecciona grupos para asignar al ciclo",
                     list(grupos_dict.keys()),
-                    help="Solo se muestran grupos sin ciclo activo"
+                    help="Solo se muestran grupos sin ciclo activo",
+                    disabled=solo_lectura
                 )
                 ids_grupos = [grupos_dict[g] for g in grupos_seleccionados]
             else:
@@ -281,7 +343,7 @@ def crear_ciclo(id_distrito=None):
                     for g in grupos_no_disponibles:
                         st.write(f"- {g['Nombre']} (finaliza: {g['Fecha_Fin']})")
             
-            submitted = st.form_submit_button("Crear Ciclo", type="primary")
+            submitted = st.form_submit_button("Crear Ciclo", type="primary", disabled=solo_lectura)
             
             if submitted:
                 # Validaciones
@@ -347,7 +409,9 @@ def crear_ciclo(id_distrito=None):
         conexion.close()
 
 
-def gestionar_estado_ciclos(id_distrito=None):
+def gestionar_estado_ciclos(id_distrito=None, id_grupo=None, solo_lectura=False):
+    from modulos.solo_lectura import es_administradora
+    solo_lectura = es_administradora()
     """
     Permite gestionar el estado de los ciclos: actualizar ahorro, finalizar ciclos, etc.
     Si se proporciona id_distrito, solo permite gestionar ciclos de ese distrito.
@@ -363,7 +427,27 @@ def gestionar_estado_ciclos(id_distrito=None):
     
     try:
         # Obtener ciclos activos y pendientes
-        if id_distrito is not None:
+        if id_grupo is not None:
+            cursor.execute("""
+                SELECT 
+                    c.Id_Ciclo,
+                    c.Fecha_Inicio,
+                    c.Fecha_Fin,
+                    c.Ahorro_Acumulado,
+                    COUNT(DISTINCT g.Id_grupo) as num_grupos,
+                    CASE 
+                        WHEN CURDATE() < c.Fecha_Inicio THEN 'Pendiente'
+                        WHEN CURDATE() BETWEEN c.Fecha_Inicio AND c.Fecha_Fin THEN 'Activo'
+                        WHEN CURDATE() > c.Fecha_Fin THEN 'Completado'
+                    END as estado
+                FROM Ciclo c
+                LEFT JOIN Grupos g ON g.Id_Ciclo = c.Id_Ciclo
+                WHERE g.Id_grupo = %s
+                GROUP BY c.Id_Ciclo
+                HAVING estado IN ('Activo', 'Pendiente')
+                ORDER BY c.Fecha_Inicio DESC
+            """, (id_grupo,))
+        elif id_distrito is not None:
             cursor.execute("""
                 SELECT 
                     c.Id_Ciclo,
@@ -435,12 +519,12 @@ def gestionar_estado_ciclos(id_distrito=None):
                     min_value=0.0,
                     value=float(ciclo['Ahorro_Acumulado'] or 0),
                     step=0.01,
-                    format="%.2f"
+                    format="%.2f",
+                    disabled=solo_lectura
                 )
-                
                 col1, col2 = st.columns(2)
                 with col1:
-                    if st.form_submit_button("Actualizar Ahorro", type="primary"):
+                    if st.form_submit_button("Actualizar Ahorro", type="primary", disabled=solo_lectura):
                         try:
                             cursor.execute(
                                 "UPDATE Ciclo SET Ahorro_Acumulado = %s WHERE Id_Ciclo = %s",
@@ -509,22 +593,49 @@ def gestionar_estado_ciclos(id_distrito=None):
                 st.write("- El ciclo quedará marcado como completado")
                 st.write("- Esta acción NO se puede deshacer")
                 
-                confirmar = st.checkbox("Confirmo que deseo finalizar este ciclo")
+                confirmar = st.checkbox("Confirmo que deseo finalizar este ciclo", disabled=solo_lectura)
                 
-                if st.button("🏁 Finalizar Ciclo Ahora", type="secondary", disabled=not confirmar):
+                # Validar préstamos pendientes según el contexto
+                prestamos_pendientes = 0
+                prestamos_detalle = []
+                if id_grupo is not None:
+                    # Solo para el grupo propio (directiva)
+                    cursor.execute("""
+                        SELECT COUNT(*) as pendientes FROM Prestamos p
+                        INNER JOIN Grupos g ON p.Id_grupo = g.Id_grupo
+                        WHERE g.Id_grupo = %s AND p.Estado IN ('Pendiente', 'Vencido')
+                    """, (id_grupo,))
+                    prestamos_pendientes = cursor.fetchone()['pendientes']
+                else:
+                    # Para todos los grupos asociados al ciclo (promotora, administradora)
+                    cursor.execute("""
+                        SELECT g.Nombre, COUNT(p.Id_prestamo) as pendientes
+                        FROM Grupos g
+                        LEFT JOIN Prestamos p ON p.Id_grupo = g.Id_grupo AND p.Estado IN ('Pendiente', 'Vencido')
+                        WHERE g.Id_Ciclo = %s
+                        GROUP BY g.Id_grupo
+                    """, (id_ciclo,))
+                    prestamos_grupos = cursor.fetchall()
+                    prestamos_pendientes = sum(g['pendientes'] for g in prestamos_grupos)
+                    prestamos_detalle = [f"{g['Nombre']}: {g['pendientes']} préstamo(s) pendiente(s)" for g in prestamos_grupos if g['pendientes'] > 0]
+                if prestamos_pendientes > 0:
+                    st.error(f"No se puede finalizar el ciclo: hay {prestamos_pendientes} préstamo(s) pendiente(s) de pago en el/los grupo(s).")
+                    if prestamos_detalle:
+                        st.warning("Detalle de préstamos pendientes:")
+                        for detalle in prestamos_detalle:
+                            st.write(f"- {detalle}")
+                elif st.button("🏁 Finalizar Ciclo Ahora", type="secondary", disabled=not confirmar or solo_lectura):
                     try:
                         # Actualizar fecha fin a hoy
                         cursor.execute(
                             "UPDATE Ciclo SET Fecha_Fin = CURDATE() WHERE Id_Ciclo = %s",
                             (id_ciclo,)
                         )
-                        
                         # Desasignar grupos
                         cursor.execute(
                             "UPDATE Grupos SET Id_Ciclo = NULL WHERE Id_Ciclo = %s",
                             (id_ciclo,)
                         )
-                        
                         conexion.commit()
                         st.success(f"✅ Ciclo {id_ciclo} finalizado correctamente.")
                         st.info("Los grupos han sido desasignados y pueden ser asignados a un nuevo ciclo.")

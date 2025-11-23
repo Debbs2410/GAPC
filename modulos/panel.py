@@ -1,4 +1,5 @@
 import streamlit as st
+from modulos.solo_lectura import es_administradora
 from modulos.registro_beneficiarios import registrar_beneficiario, crear_miembro, ver_todos_miembros
 from modulos.registro_usuarios import registrar_usuario
 from modulos.grupos import gestionar_grupos
@@ -23,15 +24,43 @@ def mostrar_panel():
         return
 
     usuario = st.session_state["usuario"]
+
     rol_raw = usuario.get("rol") or usuario.get("Rol")
-    
-    if rol_raw:
-        rol_limpio = rol_raw.strip().lower()
-    else:
-        rol_limpio = ""
+    rol_limpio = rol_raw.strip().lower() if rol_raw else ""
+
+    # --- Permitir acceso a panel de directiva si es miembro y está en Directiva_Grupo ---
+    if rol_limpio == "miembro":
+        # Buscar si el usuario es parte de la directiva de algún grupo
+        from modulos.config.conexion import obtener_conexion
+        conexion_tmp = obtener_conexion()
+        if conexion_tmp:
+            cursor_tmp = conexion_tmp.cursor(dictionary=True)
+            # Buscar el id del miembro (usuario)
+            id_usuario = usuario.get("Id_usuario") or usuario.get("id_usuario")
+            if id_usuario:
+                cursor_tmp.execute("SELECT id, grupo_id FROM Miembros WHERE usuario_id = %s", (id_usuario,))
+                miembro_row = cursor_tmp.fetchone()
+                if miembro_row:
+                    id_miembro = miembro_row['id']
+                    cursor_tmp.execute("SELECT id_grupo, rol_directiva FROM Directiva_Grupo WHERE id_miembro = %s", (id_miembro,))
+                    directiva_row = cursor_tmp.fetchone()
+                    if directiva_row:
+                        # Sobrescribir el rol y grupo para acceso a panel de directiva
+                        rol_limpio = "directiva"
+                        usuario['id_grupo'] = directiva_row['id_grupo']
+                        usuario['rol_directiva'] = directiva_row['rol_directiva']
+            conexion_tmp.close()
 
     st.sidebar.title("📋 Menú de navegación")
-    st.sidebar.write(f"👤 {usuario.get('Nombre_Usuario', usuario.get('nombre', 'Sin nombre'))} ({rol_raw})")
+    # Mostrar el rol específico de directiva si aplica
+    if rol_limpio == "directiva":
+        rol_directiva = usuario.get('rol_directiva') or usuario.get('Rol_Directiva')
+        if rol_directiva:
+            st.sidebar.write(f"👤 {usuario.get('Nombre_Usuario', usuario.get('nombre', 'Sin nombre'))} ({rol_directiva})")
+        else:
+            st.sidebar.write(f"👤 {usuario.get('Nombre_Usuario', usuario.get('nombre', 'Sin nombre'))} (Directiva)")
+    else:
+        st.sidebar.write(f"👤 {usuario.get('Nombre_Usuario', usuario.get('nombre', 'Sin nombre'))} ({rol_raw})")
 
     if rol_limpio == "administradora":
         st.title("Panel de Administradora")
@@ -202,6 +231,7 @@ def mostrar_panel():
                 "Préstamos",
                 "Rifas",
                 "Caja",
+                "Ciclos",
                 "Ver reportes"
             ],
         )
@@ -232,6 +262,8 @@ def mostrar_panel():
         elif opcion == "Rifas":
             from modulos.rifas import gestionar_rifas
             gestionar_rifas(id_grupo=id_grupo)
+        elif opcion == "Ciclos":
+            gestionar_ciclos(id_grupo=id_grupo)
         elif opcion == "Ver reportes":
             from modulos.reportes import generar_reporte_ciclo
             generar_reporte_ciclo(id_grupo=id_grupo)

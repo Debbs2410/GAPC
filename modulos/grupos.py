@@ -1,6 +1,8 @@
+
 import streamlit as st
 from modulos.config.conexion import obtener_conexion
 import pandas as pd
+from modulos.solo_lectura import es_administradora
 
 
 def gestionar_grupos(id_distrito=None):
@@ -11,13 +13,20 @@ def gestionar_grupos(id_distrito=None):
     """
     st.title("👥 Gestión de Grupos")
     # Tabs para organizar las funcionalidades
-    tab1, tab2, tab3 = st.tabs(["📋 Ver Grupos", "➕ Crear Grupo", "✏️ Editar/Eliminar"])
-    with tab1:
-        ver_todos_grupos(id_distrito=id_distrito)
-    with tab2:
-        crear_grupo(id_distrito=id_distrito)
-    with tab3:
-        editar_eliminar_grupo(id_distrito=id_distrito)
+    if es_administradora():
+        tab1, tab3 = st.tabs(["📋 Ver Grupos", "✏️ Editar/Eliminar"])
+        with tab1:
+            ver_todos_grupos(id_distrito=id_distrito)
+        with tab3:
+            editar_eliminar_grupo(id_distrito=id_distrito)
+    else:
+        tab1, tab2, tab3 = st.tabs(["📋 Ver Grupos", "➕ Crear Grupo", "✏️ Editar/Eliminar"])
+        with tab1:
+            ver_todos_grupos(id_distrito=id_distrito)
+        with tab2:
+            crear_grupo(id_distrito=id_distrito)
+        with tab3:
+            editar_eliminar_grupo(id_distrito=id_distrito)
 
 
 def ver_todos_grupos(id_distrito=None):
@@ -253,15 +262,19 @@ def crear_grupo(id_distrito=None):
     Formulario para crear un nuevo grupo.
     Si se proporciona id_distrito, el grupo se crea solo en ese distrito y el selector de distrito se oculta.
     """
+    if es_administradora():
+        st.info("🔒 Solo lectura: la administradora no puede crear grupos. Solo puede visualizar los grupos existentes.")
+        return
+
     st.subheader("➕ Crear Nuevo Grupo")
-    
+
     conexion = obtener_conexion()
     if not conexion:
         st.error("❌ Error de conexión a la base de datos.")
         return
-    
+
     cursor = conexion.cursor(dictionary=True)
-    
+
     try:
         # Obtener lista de distritos solo si no se fuerza id_distrito
         if id_distrito is None:
@@ -353,6 +366,16 @@ def crear_grupo(id_distrito=None):
                 st.info("ℹ️ No hay promotoras disponibles en el sistema")
                 ids_promotoras = []
             
+
+            # --- Selección de directiva (presidenta, secretaria, tesorero) ---
+            st.divider()
+            st.write("**👩‍💼 Asignar Directiva del Grupo**")
+            # Miembros temporales (aún no existen, así que solo se puede dejar vacío o permitir asignar después)
+            st.info("Puedes asignar la directiva después de registrar los miembros del grupo.")
+            presidenta_id = st.number_input("ID de Miembro Presidenta (opcional)", min_value=0, step=1, value=0, help="Asigna después si aún no hay miembros.")
+            secretaria_id = st.number_input("ID de Miembro Secretaria (opcional)", min_value=0, step=1, value=0, help="Asigna después si aún no hay miembros.")
+            tesorero_id = st.number_input("ID de Miembro Tesorero (opcional)", min_value=0, step=1, value=0, help="Asigna después si aún no hay miembros.")
+
             submitted = st.form_submit_button(
                 "✅ Crear Grupo",
                 type="primary"
@@ -367,7 +390,6 @@ def crear_grupo(id_distrito=None):
                     st.error(f"❌ Ya existe un grupo con el nombre '{nombre_grupo}'.")
                     return
 
-                # Insertar el grupo
                 try:
                     # Crear caja individual para el grupo
                     interes_decimal = interes_grupo / 100
@@ -379,8 +401,6 @@ def crear_grupo(id_distrito=None):
                     VALUES (%s, %s, %s, %s, %s)
                     """
                     cursor.execute(sql, (nombre_grupo, numero_miembros, id_ciclo, nueva_caja_id, distrito_id))
-
-                    # Obtener el ID del grupo recién creado
                     id_grupo_nuevo = cursor.lastrowid
 
                     # Asignar promotoras al grupo
@@ -391,11 +411,21 @@ def crear_grupo(id_distrito=None):
                                 (id_grupo_nuevo, id_promotora)
                             )
 
+                    # Asignar directiva si se proporcionan IDs válidos
+                    if presidenta_id > 0:
+                        cursor.execute("INSERT INTO Directiva_Grupo (id_grupo, id_miembro, rol_directiva) VALUES (%s, %s, 'Presidenta')", (id_grupo_nuevo, presidenta_id))
+                    if secretaria_id > 0:
+                        cursor.execute("INSERT INTO Directiva_Grupo (id_grupo, id_miembro, rol_directiva) VALUES (%s, %s, 'Secretaria')", (id_grupo_nuevo, secretaria_id))
+                    if tesorero_id > 0:
+                        cursor.execute("INSERT INTO Directiva_Grupo (id_grupo, id_miembro, rol_directiva) VALUES (%s, %s, 'Tesorero')", (id_grupo_nuevo, tesorero_id))
+
                     conexion.commit()
                     st.success(f"✅ Grupo '{nombre_grupo}' creado exitosamente en {distrito_nombre} con ID {id_grupo_nuevo}!")
 
                     if ids_promotoras:
                         st.info(f"👩‍💼 {len(ids_promotoras)} promotora(s) asignada(s) al grupo.")
+                    if presidenta_id > 0 or secretaria_id > 0 or tesorero_id > 0:
+                        st.info("👩‍💼 Directiva registrada para el grupo.")
 
                     st.balloons()
                     st.rerun()
