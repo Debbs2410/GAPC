@@ -49,57 +49,64 @@ def gestionar_asistencia_multas(id_distrito=None):
         ])
         # Filtros globales para administradora
         conexion = obtener_conexion()
-        cursor = conexion.cursor(dictionary=True)
-        cursor.execute("SELECT distrito_id, nombre_distrito FROM Distrito ORDER BY nombre_distrito")
-        distritos = cursor.fetchall()
-        distrito_nombres = ["Todos"] + [d['nombre_distrito'] for d in distritos]
-        distrito_sel = st.selectbox("Selecciona un distrito", distrito_nombres, key="asist_distrito_admin_main")
-        if distrito_sel == "Todos":
-            distrito_id_sel = None
-        else:
-            distrito_id_sel = next((d['distrito_id'] for d in distritos if d['nombre_distrito'] == distrito_sel), None)
-        grupos = []
-        grupo_nombres = ["Todos"]
-        if distrito_id_sel:
-            cursor.execute("SELECT Id_grupo, Nombre FROM Grupos WHERE distrito_id = %s ORDER BY Nombre", (distrito_id_sel,))
-            grupos = cursor.fetchall()
-            grupo_nombres += [g['Nombre'] for g in grupos]
-        elif distrito_sel == "Todos":
-            cursor.execute("SELECT Id_grupo, Nombre FROM Grupos ORDER BY Nombre")
-            grupos = cursor.fetchall()
-            grupo_nombres += [g['Nombre'] for g in grupos]
-        grupo_sel = st.selectbox("Selecciona un grupo", grupo_nombres, key="asist_grupo_admin_main")
-        if grupo_sel == "Todos":
-            grupo_id_sel = None
-        else:
-            grupo_id_sel = next((g['Id_grupo'] for g in grupos if g['Nombre'] == grupo_sel), None)
-        # Mostrar promotoras asignadas al grupo seleccionado (solo si hay grupo específico)
-        if grupo_id_sel:
-            cursor.execute("""
-                SELECT Nombre_Usuario as nombre, Correo as correo
-                FROM Usuarios 
-                WHERE Id_grupo = %s AND Rol = 'Promotora'""", (grupo_id_sel,))
-            promotoras = cursor.fetchall()
-            if promotoras:
-                st.write("**👩‍💼 Promotoras asignadas a este grupo:**")
-                for p in promotoras:
-                    st.write(f"- {p['nombre']} ({p['correo']})")
+        if not conexion:
+            st.error("❌ Error de conexión a la base de datos. Por favor, intente más tarde.")
+            return
+        try:
+            cursor = conexion.cursor(dictionary=True)
+            cursor.execute("SELECT distrito_id, nombre_distrito FROM Distrito ORDER BY nombre_distrito")
+            distritos = cursor.fetchall()
+            distrito_nombres = ["Todos"] + [d['nombre_distrito'] for d in distritos]
+            distrito_sel = st.selectbox("Selecciona un distrito", distrito_nombres, key="asist_distrito_admin_main")
+            if distrito_sel == "Todos":
+                distrito_id_sel = None
             else:
-                # Si no hay promotora asignada al grupo, buscar promotora monitora del distrito
-                if distrito_id_sel:
-                    cursor.execute("SELECT Nombre_Usuario, Correo FROM Usuarios WHERE Rol = 'Promotora' AND Id_distrito = %s LIMIT 1", (distrito_id_sel,))
-                    promotora_distrito = cursor.fetchone()
-                    if promotora_distrito:
-                        st.info(f"👩‍💼 Promotora monitora del distrito: {promotora_distrito['Nombre_Usuario']} ({promotora_distrito['Correo']})")
-                    else:
-                        st.warning("⚠️ Sin promotora asignada al grupo ni al distrito")
-        # Solo visualización, sin edición ni programación
-        with tab1:
-            ver_reuniones(id_distrito=distrito_id_sel, id_grupo=grupo_id_sel)
-        with tab2:
-            ver_asistencia_global(distrito_id_sel, grupo_id_sel)
-        with tab3:
-            ver_multas(id_grupo=grupo_id_sel)
+                distrito_id_sel = next((d['distrito_id'] for d in distritos if d['nombre_distrito'] == distrito_sel), None)
+            grupos = []
+            grupo_nombres = ["Todos"]
+            if distrito_id_sel:
+                cursor.execute("SELECT Id_grupo, Nombre FROM Grupos WHERE distrito_id = %s ORDER BY Nombre", (distrito_id_sel,))
+                grupos = cursor.fetchall()
+                grupo_nombres += [g['Nombre'] for g in grupos]
+            elif distrito_sel == "Todos":
+                cursor.execute("SELECT Id_grupo, Nombre FROM Grupos ORDER BY Nombre")
+                grupos = cursor.fetchall()
+                grupo_nombres += [g['Nombre'] for g in grupos]
+            grupo_sel = st.selectbox("Selecciona un grupo", grupo_nombres, key="asist_grupo_admin_main")
+            if grupo_sel == "Todos":
+                grupo_id_sel = None
+            else:
+                grupo_id_sel = next((g['Id_grupo'] for g in grupos if g['Nombre'] == grupo_sel), None)
+            # Mostrar promotoras asignadas al grupo seleccionado (solo si hay grupo específico)
+            if grupo_id_sel:
+                cursor.execute("""
+                    SELECT Nombre_Usuario as nombre, Correo as correo
+                    FROM Usuarios 
+                    WHERE Id_grupo = %s AND Rol = 'Promotora'""", (grupo_id_sel,))
+                promotoras = cursor.fetchall()
+                if promotoras:
+                    st.write("**👩‍💼 Promotoras asignadas a este grupo:**")
+                    for p in promotoras:
+                        st.write(f"- {p['nombre']} ({p['correo']})")
+                else:
+                    # Si no hay promotora asignada al grupo, buscar promotora monitora del distrito
+                    if distrito_id_sel:
+                        cursor.execute("SELECT Nombre_Usuario, Correo FROM Usuarios WHERE Rol = 'Promotora' AND Id_distrito = %s LIMIT 1", (distrito_id_sel,))
+                        promotora_distrito = cursor.fetchone()
+                        if promotora_distrito:
+                            st.info(f"👩‍💼 Promotora monitora del distrito: {promotora_distrito['Nombre_Usuario']} ({promotora_distrito['Correo']})")
+                        else:
+                            st.warning("⚠️ Sin promotora asignada al grupo ni al distrito")
+            # Solo visualización, sin edición ni programación
+            with tab1:
+                ver_reuniones(id_distrito=distrito_id_sel, id_grupo=grupo_id_sel)
+            with tab2:
+                ver_asistencia_global(distrito_id_sel, grupo_id_sel)
+            with tab3:
+                ver_multas(id_grupo=grupo_id_sel)
+        finally:
+            if conexion:
+                conexion.close()
         return
 # --- NUEVA FUNCIÓN PARA ADMINISTRADORA: Visualización global de ausencias acumuladas ---
 def ver_asistencia_global(distrito_id_sel=None, grupo_id_sel=None):
