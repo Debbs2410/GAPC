@@ -133,6 +133,8 @@ def ver_asistencia_global(distrito_id_sel=None, grupo_id_sel=None):
 
     # Mostrar cada reunión como un expander (desplegable) con toda la información relevante
     if reuniones:
+        if not isinstance(reuniones, list):
+            reuniones = list(reuniones) if reuniones is not None else []
         for reunion in reuniones:
             estado_emoji = {
                 'Programada': '📅',
@@ -159,14 +161,16 @@ def ver_asistencia_global(distrito_id_sel=None, grupo_id_sel=None):
                     st.info(f"📝 Observaciones: {reunion['Observaciones']}")
     else:
         st.info("No hay reuniones para mostrar.")
-        programadas = len([r for r in reuniones if r['Estado'] == 'Programada'])
-        canceladas = len([r for r in reuniones if r['Estado'] == 'Cancelada'])
+        reuniones = reuniones if isinstance(reuniones, list) else []
+        programadas = len([r for r in reuniones if isinstance(r, dict) and r.get('Estado') == 'Programada'])
+        canceladas = len([r for r in reuniones if isinstance(r, dict) and r.get('Estado') == 'Cancelada'])
         st.metric("📅 Programadas", programadas)
         st.metric("❌ Canceladas", canceladas)
         st.divider()
         if not reuniones:
             st.info("📭 No hay reuniones registradas para este grupo o filtro.")
-            conexion.close()
+            if 'conexion' in locals() and conexion:
+                conexion.close()
             return
         # Mostrar reuniones (fuera de else para todos los casos)
         for reunion in reuniones:
