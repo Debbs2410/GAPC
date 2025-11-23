@@ -107,6 +107,8 @@ def ver_asistencia_global(distrito_id_sel=None, grupo_id_sel=None):
     Visualiza ausencias acumuladas por miembro, distrito y grupo para la administradora.
     """
     st.subheader("✅ Ausencias acumuladas por miembro (por grupo)")
+    reuniones = None  # Inicializa la variable para evitar UnboundLocalError
+    cursor = None  # Inicializa cursor para evitar errores de referencia
     # Aquí va la lógica de visualización de ausencias acumuladas, si aplica.
     # Tabs principales para usuarios que no son administradora
     if 'id_distrito' not in locals():
