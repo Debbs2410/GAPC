@@ -27,7 +27,103 @@ from datetime import datetime, date, time, timedelta
 
 # Definición temporal para evitar error de función no definida
 def ver_reuniones(id_distrito=None, id_grupo=None):
-    st.info("Función ver_reuniones no implementada en este archivo.")
+    from modulos.config.conexion import obtener_conexion
+    import streamlit as st
+    conexion = obtener_conexion()
+    if not conexion:
+        st.error("❌ Error de conexión a la base de datos.")
+        return
+    cursor = conexion.cursor(dictionary=True)
+    # Administradora: ve todas las reuniones del sistema
+    # Promotora: ve y edita reuniones de sus grupos (por distrito)
+    # Directiva: ve y edita reuniones de su grupo
+    usuario = st.session_state.get('usuario', {}) if 'usuario' in st.session_state else {}
+    rol = usuario.get('Rol') or usuario.get('rol')
+    filtro = ""
+    params = []
+    if rol == 'Administradora':
+        if id_distrito:
+            filtro += " AND g.distrito_id = %s"
+            params.append(id_distrito)
+        if id_grupo:
+            filtro += " AND r.Id_grupo = %s"
+            params.append(id_grupo)
+    elif rol == 'Promotora':
+        # Solo reuniones de grupos de su distrito
+        id_distrito_usuario = usuario.get('Id_distrito') or usuario.get('id_distrito')
+        filtro += " AND g.distrito_id = %s"
+        params.append(id_distrito_usuario)
+        if id_grupo:
+            filtro += " AND r.Id_grupo = %s"
+            params.append(id_grupo)
+    elif rol == 'Directiva':
+        # Solo reuniones de su grupo
+        id_grupo_usuario = usuario.get('Id_grupo') or usuario.get('id_grupo')
+        filtro += " AND r.Id_grupo = %s"
+        params.append(id_grupo_usuario)
+    else:
+        st.warning("No se pudo determinar el rol del usuario.")
+        conexion.close()
+        return
+    query = f'''
+        SELECT r.*, g.Nombre AS nombre_grupo
+        FROM Reuniones r
+        LEFT JOIN Grupos g ON r.Id_grupo = g.Id_grupo
+        WHERE 1=1 {filtro}
+        ORDER BY r.Fecha_reunion DESC
+    '''
+    cursor.execute(query, tuple(params))
+    reuniones = cursor.fetchall()
+    if not reuniones:
+        st.info("No hay reuniones para mostrar.")
+        conexion.close()
+        return
+    for reunion in reuniones:
+        estado_emoji = {
+            'Programada': '📅',
+            'Realizada': '✅',
+            'Cancelada': '❌'
+        }
+        nombre_grupo = reunion.get('nombre_grupo') or reunion.get('Nombre') or ''
+        with st.expander(f"{estado_emoji.get(reunion.get('Estado'), '📋')} {nombre_grupo} - Semana {reunion.get('Numero_semana', '')} ({reunion.get('Fecha_reunion', '')})"):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write(f"**📅 Fecha:** {reunion.get('Fecha_reunion', '')}")
+                st.write(f"**🔢 Semana del Ciclo:** {reunion.get('Numero_semana', '')}")
+                st.write(f"**🕐 Hora Inicio:** {reunion.get('Hora_inicio', 'No definida')}")
+                st.write(f"**🕐 Hora Fin:** {reunion.get('Hora_fin', 'No definida')}")
+                st.write(f"**📍 Lugar:** {reunion.get('Lugar', 'No definido')}")
+            with col2:
+                st.write(f"**👥 Grupo:** {nombre_grupo}")
+                st.write(f"**📊 Estado:** {reunion.get('Estado', '')}")
+                st.write(f"**✅ Presentes:** {reunion.get('Presentes', 0) or 0}")
+                st.write(f"**⏰ Presentes con Tardanza:** {reunion.get('Tardanzas', 0) or 0}")
+                st.write(f"**❌ Ausentes:** {reunion.get('Ausentes', 0) or 0}")
+                st.write(f"**📋 Total Registrado:** {reunion.get('Total_Asistencias', 0) or 0}")
+            if reunion.get('Observaciones'):
+                st.info(f"📝 Observaciones: {reunion['Observaciones']}")
+            # Solo Promotora y Directiva pueden editar/cancelar
+            if rol in ('Promotora', 'Directiva'):
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    if st.button(f"✅ Marcar Realizada", key=f"realizada_{reunion['Id_reunion']}"):
+                        cursor.execute(
+                            "UPDATE Reuniones SET Estado = 'Realizada' WHERE Id_reunion = %s",
+                            (reunion['Id_reunion'],)
+                        )
+                        conexion.commit()
+                        st.success("Reunión marcada como realizada")
+                        st.rerun()
+                with col_btn2:
+                    if st.button(f"❌ Cancelar", key=f"cancelar_{reunion['Id_reunion']}"):
+                        cursor.execute(
+                            "UPDATE Reuniones SET Estado = 'Cancelada' WHERE Id_reunion = %s",
+                            (reunion['Id_reunion'],)
+                        )
+                        conexion.commit()
+                        st.warning("Reunión cancelada")
+                        st.rerun()
+    conexion.close()
 
 # Definición temporal para evitar error de función no definida
 def gestionar_reuniones(id_distrito=None, id_grupo=None):
@@ -278,7 +374,10 @@ def registrar_asistencia(id_distrito=None, id_grupo=None):
     Registro de asistencia a reuniones con causas de ausencia diferenciadas.
     """
     from modulos.solo_lectura import es_administradora
-    if es_administradora():
+    import streamlit as st
+    usuario = st.session_state.get('usuario', {}) if 'usuario' in st.session_state else {}
+    rol = usuario.get('Rol') or usuario.get('rol')
+    if rol == 'Administradora':
         st.info("Solo puede visualizar asistencias. No puede registrar ni editar asistencias.")
         return
         st.subheader("✅ Registro de Asistencia")
