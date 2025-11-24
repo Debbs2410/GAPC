@@ -121,6 +121,7 @@ def ver_reuniones(id_distrito=None, id_grupo=None):
         else:
             st.info('No hay miembros registrados en este grupo.')
 
+    import matplotlib.pyplot as plt
     for reunion in reuniones:
         estado_emoji = {
             'Programada': '📅',
@@ -163,6 +164,32 @@ def ver_reuniones(id_distrito=None, id_grupo=None):
                 st.write(f"**❌ Ausentes injustificados:** {totales.get('Ausentes_Injustificados', 0) or 0}")
                 st.write(f"**📋 Ausentes justificados:** {totales.get('Ausentes_Justificados', 0) or 0}")
                 st.write(f"**🧾 Total Registrado:** {totales.get('Total_Asistencias', 0) or 0}")
+            # Diagrama de pastel de asistencia
+            total = (
+                (totales.get('Presentes', 0) or 0) +
+                (totales.get('Tardanzas', 0) or 0) +
+                (totales.get('Ausentes_Injustificados', 0) or 0) +
+                (totales.get('Ausentes_Justificados', 0) or 0)
+            )
+            if total > 0:
+                labels = ['Presentes', 'Tardanza', 'Ausente injust.', 'Ausente just.']
+                values = [
+                    totales.get('Presentes', 0) or 0,
+                    totales.get('Tardanzas', 0) or 0,
+                    totales.get('Ausentes_Injustificados', 0) or 0,
+                    totales.get('Ausentes_Justificados', 0) or 0
+                ]
+                colors = ['#4CAF50', '#FFC107', '#F44336', '#90A4AE']
+                fig, ax = plt.subplots(figsize=(4, 4))
+                wedges, texts = ax.pie(values, colors=colors, startangle=90, wedgeprops=dict(width=0.5), labels=None)
+                legend_labels = [
+                    f"{label}: {value} ({value/total:.0%})" for label, value in zip(labels, values)
+                ]
+                ax.legend(wedges, legend_labels, title="Asistencia", loc="center left", bbox_to_anchor=(1, 0.5))
+                ax.set_title("Distribución de asistencia")
+                st.pyplot(fig)
+            else:
+                st.info("No hay datos de asistencia para esta reunión.")
             if reunion.get('Observaciones'):
                 st.info(f"📝 Observaciones: {reunion['Observaciones']}")
             # Solo Promotora y Directiva pueden editar/cancelar

@@ -166,11 +166,34 @@ def gestionar_caja(id_distrito=None, id_grupo=None):
                         "Ahorro": f"${ahorro:.2f}",
                         "% del ahorro": f"{proporcion*100:.1f}%" if suma_ahorros > 0 else "0%",
                         "Multas+Rifas+InterésPréstamos+Mora": f"${monto_reparto:.2f}",
-                        "Total Recibido": f"${total_recibido:.2f}"
+                        "Total Recibido": total_recibido
                     })
                 df_reparto = pd.DataFrame(detalle_reparto)
                 st.markdown("#### Tabla de Repartición Proporcional por Miembro")
-                st.dataframe(df_reparto, hide_index=True)
+                st.dataframe(df_reparto.rename(columns={"Total Recibido": "Total Recibido ($)"}), hide_index=True)
+                # Diagrama de pastel con leyenda a un costado (solo leyenda, sin etiquetas ni porcentajes sobre el gráfico)
+                import matplotlib.pyplot as plt
+                st.markdown("#### Diagrama de Pastel: Distribución del Dinero entre Miembros")
+                valores = df_reparto['Total Recibido'].astype(float).values
+                labels = df_reparto['Miembro'].tolist()
+                if len(valores) > 0 and valores.sum() > 0:
+                    fig, ax = plt.subplots(figsize=(6, 6))
+                    wedges, _ = ax.pie(
+                        valores,
+                        labels=None,  # No mostrar etiquetas directamente
+                        startangle=90,
+                        radius=1.1
+                    )
+                    # Calcular porcentajes manualmente
+                    total = valores.sum()
+                    porcentajes = [(v / total) * 100 if total > 0 else 0 for v in valores]
+                    legend_labels = [f"{label} ({porc:.1f}%)" for label, porc in zip(labels, porcentajes)]
+                    # Añadir leyenda con nombres, porcentajes y colores
+                    ax.legend(wedges, legend_labels, title="Miembro", loc="center left", bbox_to_anchor=(1, 0.5))
+                    ax.set_title('Distribución del dinero a recibir por miembro')
+                    st.pyplot(fig)
+                else:
+                    st.info('No hay datos suficientes para mostrar el diagrama de pastel.')
         conexion.close()
         return
     # Si hay filtro de distrito, seleccionar automáticamente
@@ -253,24 +276,52 @@ def gestionar_caja(id_distrito=None, id_grupo=None):
                     ahorros_dict[row['Id_miembro']] = row['ahorro'] or 0
                 suma_ahorros = sum(ahorros_dict.values())
                 detalle_reparto = []
-                for m in miembros:
-                    ahorro = ahorros_dict.get(m['id'], 0)
-                    if suma_ahorros > 0:
-                        proporcion = ahorro / suma_ahorros
+                if n_miembros > 0:
+                    # Obtener ahorro individual de cada miembro
+                    ahorros_dict = {}
+                    cursor.execute("SELECT Id_miembro, SUM(Monto) as ahorro FROM Ahorros WHERE Id_grupo = %s GROUP BY Id_miembro", (grupo_id,))
+                    for row in cursor.fetchall():
+                        ahorros_dict[row['Id_miembro']] = row['ahorro'] or 0
+                    suma_ahorros = sum(ahorros_dict.values())
+                    detalle_reparto = []
+                    for m in miembros:
+                        ahorro = ahorros_dict.get(m['id'], 0)
+                        if suma_ahorros > 0:
+                            proporcion = ahorro / suma_ahorros
+                        else:
+                            proporcion = 0
+                        monto_reparto = total_repartir * proporcion
+                        total_recibido = ahorro + monto_reparto
+                        detalle_reparto.append({
+                            "Miembro": m['nombre'],
+                            "Ahorro": f"${ahorro:.2f}",
+                            "% del ahorro": f"{proporcion*100:.1f}%" if suma_ahorros > 0 else "0%",
+                            "Multas+Rifas+InterésPréstamos+Mora": f"${monto_reparto:.2f}",
+                            "Total Recibido": total_recibido
+                        })
+                    df_reparto = pd.DataFrame(detalle_reparto)
+                    st.markdown("#### Tabla de Repartición Proporcional por Miembro")
+                    st.dataframe(df_reparto.rename(columns={"Total Recibido": "Total Recibido ($)"}), use_container_width=True, hide_index=True)
+                    # Diagrama de pastel dentro del expander de cada grupo
+                    import matplotlib.pyplot as plt
+                    st.markdown("#### Diagrama de Pastel: Distribución del Dinero entre Miembros")
+                    valores = df_reparto['Total Recibido'].astype(float).values
+                    labels = df_reparto['Miembro'].tolist()
+                    if len(valores) > 0 and valores.sum() > 0:
+                        fig, ax = plt.subplots(figsize=(6, 6))
+                        wedges, _ = ax.pie(
+                            valores,
+                            labels=None,  # No mostrar etiquetas directamente
+                            startangle=90,
+                            radius=1.1
+                        )
+                        # Calcular porcentajes manualmente
+                        total = valores.sum()
+                        porcentajes = [(v / total) * 100 if total > 0 else 0 for v in valores]
+                        legend_labels = [f"{label} ({porc:.1f}%)" for label, porc in zip(labels, porcentajes)]
+                        # Añadir leyenda con nombres, porcentajes y colores
+                        ax.legend(wedges, legend_labels, title="Miembro", loc="center left", bbox_to_anchor=(1, 0.5))
+                        ax.set_title('Distribución del dinero a recibir por miembro')
+                        st.pyplot(fig)
                     else:
-                        proporcion = 0
-                    monto_reparto = total_repartir * proporcion
-                    total_recibido = ahorro + monto_reparto
-                    detalle_reparto.append({
-                        "Miembro": m['nombre'],
-                        "Ahorro": f"${ahorro:.2f}",
-                        "% del ahorro": f"{proporcion*100:.1f}%" if suma_ahorros > 0 else "0%",
-                        "Multas+Rifas+InterésPréstamos+Mora": f"${monto_reparto:.2f}",
-                        "Total Recibido": f"${total_recibido:.2f}"
-                    })
-                df_reparto = pd.DataFrame(detalle_reparto)
-                st.markdown("#### Tabla de Repartición Proporcional por Miembro")
-                st.dataframe(df_reparto, use_container_width=True, hide_index=True)
-            else:
-                st.info("No hay miembros en este grupo.")
-    conexion.close()
+                        st.info('No hay datos suficientes para mostrar el diagrama de pastel.')

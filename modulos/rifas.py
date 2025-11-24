@@ -28,8 +28,28 @@ def gestionar_rifas(id_distrito=None, id_grupo=None):
     else:
         grupo_nombre = st.selectbox("Grupo", list(grupos_dict.keys()), disabled=solo_lectura)
 
-    # Obtener ciclos
-    cursor.execute("SELECT Id_Ciclo, Fecha_Inicio, Fecha_Fin FROM Ciclo ORDER BY Fecha_Inicio DESC")
+    # Obtener rol del usuario
+    usuario = st.session_state.get('usuario', {}) if 'usuario' in st.session_state else {}
+    rol = (usuario.get('Rol') or usuario.get('rol') or '').strip().lower()
+    # Filtrar ciclos solo para directiva
+    if rol == 'directiva' and id_grupo is not None:
+        cursor.execute("""
+            SELECT c.Id_Ciclo, c.Fecha_Inicio, c.Fecha_Fin
+            FROM Ciclo c
+            INNER JOIN Grupos g ON g.Id_Ciclo = c.Id_Ciclo
+            WHERE g.Id_grupo = %s
+            ORDER BY c.Fecha_Inicio DESC
+        """, (id_grupo,))
+    elif id_distrito is not None:
+        cursor.execute("""
+            SELECT DISTINCT c.Id_Ciclo, c.Fecha_Inicio, c.Fecha_Fin
+            FROM Ciclo c
+            INNER JOIN Grupos g ON g.Id_Ciclo = c.Id_Ciclo
+            WHERE g.distrito_id = %s
+            ORDER BY c.Fecha_Inicio DESC
+        """, (id_distrito,))
+    else:
+        cursor.execute("SELECT Id_Ciclo, Fecha_Inicio, Fecha_Fin FROM Ciclo ORDER BY Fecha_Inicio DESC")
     ciclos = cursor.fetchall()
     ciclos_dict = {f"Ciclo {c['Id_Ciclo']} ({c['Fecha_Inicio']} - {c['Fecha_Fin']})": c['Id_Ciclo'] for c in ciclos}
 

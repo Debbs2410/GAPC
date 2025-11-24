@@ -128,6 +128,8 @@ def crear_miembro(id_distrito=None, id_grupo=None):
     
     try:
         distrito_id = None
+        max_miembros = 50
+        grupo_completo = False
         if id_grupo:
             # Directiva: solo puede crear miembros en su grupo
             cursor.execute("SELECT Id_grupo, Nombre, distrito_id FROM Grupos WHERE Id_grupo = %s", (id_grupo,))
@@ -137,6 +139,11 @@ def crear_miembro(id_distrito=None, id_grupo=None):
                 return
             grupos = [grupo_row]
             distrito_id = grupo_row['distrito_id']
+            # Validar cantidad de miembros
+            cursor.execute("SELECT COUNT(*) as total FROM Miembros WHERE grupo_id = %s", (id_grupo,))
+            total_miembros = cursor.fetchone()['total']
+            if total_miembros >= max_miembros:
+                grupo_completo = True
         elif id_distrito:
             # Si es promotora, el distrito ya está definido
             distrito_id = id_distrito
@@ -165,20 +172,18 @@ def crear_miembro(id_distrito=None, id_grupo=None):
         
         # Formulario en columnas
         col1, col2 = st.columns(2)
-        
+        if grupo_completo and not es_administradora():
+            st.error("❌ Este grupo ya tiene el máximo de 50 miembros. No puedes agregar más.")
+            return
         with col1:
-            # Nombre: cada palabra inicia con mayúscula automáticamente
-            nombre_input = st.text_input("🔤 Nombre Completo del Miembro", disabled=solo_lectura)
+            nombre_input = st.text_input("🔤 Nombre Completo del Miembro", disabled=solo_lectura or grupo_completo)
             def title_case(text):
                 return ' '.join([w.capitalize() for w in text.split()])
             nombre = title_case(nombre_input)
             if nombre_input and nombre != nombre_input:
                 st.info(f"Se guardará como: {nombre}")
-
-            sexo = st.selectbox("👤 Sexo", ["M", "F", "O"], disabled=solo_lectura)
-
-            # DUI: solo 9 dígitos, sin guiones al escribir, pero se guarda como 12345678-9
-            dui_input = st.text_input("🆔 Dui (Documento Único de Identidad)", max_chars=9, disabled=solo_lectura)
+            sexo = st.selectbox("👤 Sexo", ["M", "F", "O"], disabled=solo_lectura or grupo_completo)
+            dui_input = st.text_input("🆔 Dui (Documento Único de Identidad)", max_chars=9, disabled=solo_lectura or grupo_completo)
             dui_digits = ''.join(filter(str.isdigit, dui_input))[:9]
             dui = dui_digits[:8] + '-' + dui_digits[8:] if len(dui_digits) == 9 else dui_digits
             if dui_input and (not dui_input.isdigit() or len(dui_input) > 9):
@@ -187,27 +192,21 @@ def crear_miembro(id_distrito=None, id_grupo=None):
                 st.info("El DUI debe tener 9 dígitos.")
             if len(dui_digits) == 9:
                 st.info(f"Se guardará como: {dui}")
-
         with col2:
-            # Teléfono: formato 9999-9999
-            telefono_input = st.text_input("📞 Número de Teléfono", disabled=solo_lectura)
+            telefono_input = st.text_input("📞 Número de Teléfono", disabled=solo_lectura or grupo_completo)
             telefono_digits = ''.join(filter(str.isdigit, telefono_input))[:8]
             num_telefono = telefono_digits[:4] + '-' + telefono_digits[4:] if len(telefono_digits) > 4 else telefono_digits
             if telefono_input and (len(telefono_digits) != 8 or not telefono_input.replace('-', '').isdigit()):
                 st.warning("El número debe tener 8 dígitos y se mostrará como 9999-9999.")
             if len(telefono_digits) == 8 and telefono_input != num_telefono:
                 st.info(f"Se guardará como: {num_telefono}")
-
-            # Selector de Grupo
             grupos_dict = {g['Nombre']: g['Id_grupo'] for g in grupos}
-            grupo_nombre = st.selectbox("👥 Grupo", list(grupos_dict.keys()), disabled=solo_lectura)
+            grupo_nombre = st.selectbox("👥 Grupo", list(grupos_dict.keys()), disabled=solo_lectura or grupo_completo)
             grupo_id = grupos_dict[grupo_nombre]
-            
-        # Dirección
-        direccion = st.text_area("🏠 Dirección Completa", disabled=solo_lectura)
-        
-        if st.button("✅ Registrar Miembro", type="primary", disabled=solo_lectura):
-            # Validación de campos obligatorios
+        direccion = st.text_area("🏠 Dirección Completa", disabled=solo_lectura or grupo_completo)
+        if grupo_completo and es_administradora():
+            st.info("ℹ️ Grupo completo: ya tiene 50 miembros.")
+        if st.button("✅ Registrar Miembro", type="primary", disabled=solo_lectura or grupo_completo):
             if not nombre or not dui or not num_telefono or not direccion:
                 st.warning("⚠️ Completa todos los campos obligatorios.")
                 return
@@ -217,28 +216,21 @@ def crear_miembro(id_distrito=None, id_grupo=None):
             if len(num_telefono) != 9 or num_telefono[4] != '-':
                 st.error("El número de teléfono debe tener el formato 9999-9999.")
                 return
-
-            # Validar que no exista el mismo DUI o nombre en el grupo
             cursor.execute("SELECT 1 FROM Miembros WHERE Dui = %s OR (nombre = %s AND grupo_id = %s)", (dui, nombre, grupo_id))
             if cursor.fetchone():
                 st.error("❌ El Dui o el nombre ya se encuentra registrado en el sistema para este grupo.")
                 return
-
-            # INSERT: Incluir distrito_id
             try:
                 sql = """
                 INSERT INTO Miembros (nombre, sexo, Dui, Numero_Telefono, Direccion, grupo_id, distrito_id)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """
                 cursor.execute(sql, (nombre, sexo, dui, num_telefono, direccion, grupo_id, distrito_id))
-
-                # Actualizar el número de miembros en la tabla Grupos
                 cursor.execute("""
                     UPDATE Grupos 
                     SET Numero_miembros = (SELECT COUNT(*) FROM Miembros WHERE grupo_id = %s)
                     WHERE Id_grupo = %s
                 """, (grupo_id, grupo_id))
-
                 conexion.commit()
                 st.success(f"✅ Miembro '{nombre}' registrado correctamente en {grupo_nombre}.")
                 st.rerun()

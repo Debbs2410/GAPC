@@ -106,8 +106,24 @@ def solicitar_prestamo(id_distrito=None, id_grupo=None, solo_lectura=False):
     conexion = obtener_conexion()
     cursor = conexion.cursor(dictionary=True)
     try:
-        # Obtener ciclos activos (filtrados por distrito si corresponde)
-        if id_distrito is not None:
+        # Obtener rol del usuario
+        usuario = st.session_state.get('usuario', {}) if 'usuario' in st.session_state else {}
+        rol = (usuario.get('Rol') or usuario.get('rol') or '').strip().lower()
+        # Filtrar ciclos solo para directiva
+        if rol == 'directiva' and id_grupo is not None:
+            cursor.execute("""
+                SELECT c.*,
+                    CASE 
+                        WHEN CURDATE() < c.Fecha_Inicio THEN 'Pendiente'
+                        WHEN CURDATE() BETWEEN c.Fecha_Inicio AND c.Fecha_Fin THEN 'Activo'
+                        WHEN CURDATE() > c.Fecha_Fin THEN 'Completado'
+                    END as Estado
+                FROM Ciclo c
+                INNER JOIN Grupos g ON g.Id_Ciclo = c.Id_Ciclo
+                WHERE g.Id_grupo = %s
+                ORDER BY c.Fecha_Inicio DESC
+            """, (id_grupo,))
+        elif id_distrito is not None:
             cursor.execute("""
                 SELECT DISTINCT c.*,
                     CASE 
@@ -135,11 +151,9 @@ def solicitar_prestamo(id_distrito=None, id_grupo=None, solo_lectura=False):
                 ORDER BY c.Fecha_Inicio DESC
             """)
         ciclos_activos = cursor.fetchall()
-        
         if not ciclos_activos:
             st.warning("⚠️ No hay ningún ciclo activo")
             return
-        
         # Selector de ciclo
         if len(ciclos_activos) > 1:
             ciclo_opciones = {

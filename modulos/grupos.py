@@ -148,7 +148,6 @@ def ver_todos_grupos(id_distrito=None):
         else:
             # Convertir a DataFrame para mejor visualización
             df = pd.DataFrame(grupos)
-            
             # Renombrar columnas para mostrar
             df = df.rename(columns={
                 'Id_grupo': 'ID',
@@ -170,7 +169,6 @@ def ver_todos_grupos(id_distrito=None):
             df_mostrar = df[columnas_mostrar]
             # Mostrar tabla
             st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
-            
             # Métricas generales
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -184,8 +182,41 @@ def ver_todos_grupos(id_distrito=None):
             with col4:
                 fondo_total = sum([g['fondo_comun'] or 0 for g in grupos])
                 st.metric("💰 Fondo Total", f"${fondo_total:.2f}")
-            
-            # (Se eliminó la sección de 'Grupos por Distrito')
+
+            # Diagrama de cajas y bigotes para la administradora
+            import matplotlib.pyplot as plt
+            import seaborn as sns
+            usuario = st.session_state.get('usuario', {}) if 'usuario' in st.session_state else {}
+            rol = (usuario.get('Rol') or usuario.get('rol') or '').strip().lower()
+            if es_administradora() and not df.empty:
+                st.divider()
+                st.subheader("📊 Distribución de Miembros por Grupo y Distrito")
+                fig, ax = plt.subplots(figsize=(8, 5))
+                sns.boxplot(data=df, x='Distrito', y='Nº Miembros', ax=ax)
+                ax.set_title('Distribución de miembros por grupo en cada distrito')
+                ax.set_ylabel('Nº Miembros por Grupo')
+                ax.set_xlabel('Distrito')
+                st.pyplot(fig)
+            elif rol == 'promotora' and not df.empty:
+                # Mostrar solo los grupos del distrito de la promotora
+                id_distrito_usuario = usuario.get('Id_distrito') or usuario.get('id_distrito')
+                df_promotora = df[df['Distrito'].notnull()]
+                if id_distrito_usuario:
+                    # Filtrar por distrito exacto si es posible
+                    df_promotora = df[df['Distrito'].str.lower().str.contains(str(id_distrito_usuario).lower()) | (df['Distrito'] == id_distrito_usuario)]
+                st.divider()
+                st.subheader("📊 Número de Miembros por Grupo en tu Distrito")
+                if not df_promotora.empty:
+                    fig, ax = plt.subplots(figsize=(8, 5))
+                    df_promotora_sorted = df_promotora.sort_values('Nº Miembros', ascending=False)
+                    ax.bar(df_promotora_sorted['Nombre del Grupo'], df_promotora_sorted['Nº Miembros'], color='skyblue')
+                    ax.set_title('Miembros por Grupo en tu Distrito')
+                    ax.set_ylabel('Nº Miembros')
+                    ax.set_xlabel('Grupo')
+                    plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+                    st.pyplot(fig)
+                else:
+                    st.info('No hay grupos registrados en tu distrito.')
 
             st.divider()
             st.subheader("📌 Detalles de Grupos por Distrito")
@@ -232,7 +263,7 @@ def ver_todos_grupos(id_distrito=None):
                         if miembros:
                             st.write(f"**👤 Miembros del grupo ({len(miembros)}):**")
                             for m in miembros:
-                                st.write(f"- {m['nombre']} ({m['sexo']}) - Tel: {m['Numero_Telefono']}")
+                                st.write(f"- {m['nombre']} ({m['sexo']}) - Tel: {m['Numero_Telefono']}" )
                         else:
                             st.info("Sin miembros registrados")
     

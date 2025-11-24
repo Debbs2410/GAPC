@@ -521,159 +521,137 @@ def ver_ahorros(id_ciclo_filtro=None, id_distrito=None, id_grupo=None):
     cursor = conexion.cursor(dictionary=True)
     
     try:
+        # Obtener rol del usuario
+        usuario = st.session_state.get('usuario', {}) if 'usuario' in st.session_state else {}
+        rol = (usuario.get('Rol') or usuario.get('rol') or '').strip().lower()
         # Filtros
         col1, col2, col3 = st.columns(3)
-        with col1:
-            if id_grupo is not None:
-                # Solo mostrar el grupo de pertenencia, sin opción a elegir
-                cursor.execute("SELECT Id_grupo, Nombre FROM Grupos WHERE Id_grupo = %s", (id_grupo,))
-                grupo = cursor.fetchone()
-                if grupo:
-                    st.info(f"Grupo: {grupo['Nombre']}")
-                    id_grupo_filtro = grupo['Id_grupo']
-                else:
-                    st.warning("No se encontró el grupo asignado.")
-                    id_grupo_filtro = None
+        if rol in ['directiva', 'promotora']:
+            # Filtrar grupos por distrito para promotora
+            filtro_distrito = None
+            if rol == 'promotora':
+                # Obtener distrito de la promotora
+                usuario = st.session_state.get('usuario', {})
+                filtro_distrito = usuario.get('distrito_id') or id_distrito
             else:
-                if id_distrito is not None:
-                    cursor.execute("SELECT Id_grupo, Nombre FROM Grupos WHERE distrito_id = %s ORDER BY Nombre", (id_distrito,))
-                else:
-                    cursor.execute("SELECT Id_grupo, Nombre FROM Grupos ORDER BY Nombre")
-                grupos = cursor.fetchall()
-                grupos_dict = {"Todos": None}
-                grupos_dict.update({g['Nombre']: g['Id_grupo'] for g in grupos})
-                grupo_filtro = st.selectbox("Filtrar por Grupo", list(grupos_dict.keys()))
-                id_grupo_filtro = grupos_dict[grupo_filtro]
-        
-        with col2:
-            # Obtener todos los ciclos (activos y completados)
+                filtro_distrito = id_distrito
+            if filtro_distrito:
+                cursor.execute("""
+                    SELECT g.Id_grupo, g.Nombre FROM Grupos g
+                    WHERE (%s IS NULL OR g.Id_Ciclo = %s) AND g.distrito_id = %s
+                    ORDER BY g.Nombre
+                """, (id_ciclo_filtro, id_ciclo_filtro, filtro_distrito))
+            else:
+                cursor.execute("""
+                    SELECT g.Id_grupo, g.Nombre FROM Grupos g
+                    WHERE (%s IS NULL OR g.Id_Ciclo = %s)
+                    ORDER BY g.Nombre
+                """, (id_ciclo_filtro, id_ciclo_filtro))
+            grupos = cursor.fetchall()
+            if not grupos:
+                st.info("No hay grupos para el ciclo seleccionado o en tu distrito.")
+                return
+            grupos_dict = {g['Nombre']: g['Id_grupo'] for g in grupos}
+            grupo_sel_nombre = st.selectbox("Selecciona el grupo", list(grupos_dict.keys()), key="grupo_ver_ahorros")
+            id_grupo_sel = grupos_dict[grupo_sel_nombre]
+            # Obtener reuniones del grupo
             cursor.execute("""
-                SELECT 
-                    c.*,
-                    CASE 
-                        WHEN CURDATE() < c.Fecha_Inicio THEN 'Pendiente'
-                        WHEN CURDATE() BETWEEN c.Fecha_Inicio AND c.Fecha_Fin THEN 'Activo'
-                        WHEN CURDATE() > c.Fecha_Fin THEN 'Completado'
-                    END as Estado
-                FROM Ciclo c
-                ORDER BY c.Fecha_Inicio DESC
-            """)
-            ciclos = cursor.fetchall()
-            ciclos_dict = {"Todos": None}
-            ciclos_dict.update({
-                f"Ciclo {c['Id_Ciclo']} ({c['Estado']})": c['Id_Ciclo'] 
-                for c in ciclos
-            })
-            if id_ciclo_filtro is None:
-                ciclo_filtro = st.selectbox("Filtrar por Ciclo", list(ciclos_dict.keys()), key="ciclo_ver_ahorros")
-                id_ciclo_filtro = ciclos_dict[ciclo_filtro]
-        
-        with col3:
-            estado_filtro = st.selectbox("Estado", ["Todos", "Activo", "Devuelto"])
-        
-        # Construir consulta
-        query = """
-            SELECT 
-                ah.Id_ahorro,
-                ah.Fecha_ahorro,
-                ah.Monto,
-                ah.Estado,
-                ah.Observaciones,
-                m.nombre AS Nombre_Miembro,
-                g.Nombre AS Nombre_Grupo,
-                r.Numero_semana,
-                r.Fecha_reunion,
-                u.Nombre_Usuario AS Registrado_Por
-            FROM Ahorros ah
-            JOIN Miembros m ON ah.Id_miembro = m.id
-            JOIN Grupos g ON ah.Id_grupo = g.Id_grupo
-            LEFT JOIN Reuniones r ON ah.Id_reunion = r.Id_reunion
-            LEFT JOIN Usuarios u ON ah.Registrado_por = u.Id_usuario
-            WHERE 1=1
-        """
-        params = []
-        if id_distrito is not None:
-            query += " AND g.distrito_id = %s"
-            params.append(id_distrito)
-        if id_grupo_filtro:
-            query += " AND ah.Id_grupo = %s"
-            params.append(id_grupo_filtro)
-        if id_ciclo_filtro:
-            query += " AND ah.Id_Ciclo = %s"
-            params.append(id_ciclo_filtro)
-        if estado_filtro != "Todos":
-            query += " AND ah.Estado = %s"
-            params.append(estado_filtro)
-        query += " ORDER BY ah.Fecha_ahorro DESC"
-        cursor.execute(query, params)
-        ahorros = cursor.fetchall()
-        
-        if not ahorros:
-            st.info("📭 No hay ahorros registrados que coincidan con los filtros")
+                SELECT r.Id_reunion, r.Fecha_reunion, r.Numero_semana
+                FROM Reuniones r
+                WHERE r.Id_grupo = %s AND (%s IS NULL OR r.Id_Ciclo = %s)
+                ORDER BY r.Fecha_reunion DESC
+            """, (id_grupo_sel, id_ciclo_filtro, id_ciclo_filtro))
+            reuniones = cursor.fetchall()
+            if not reuniones:
+                st.info("No hay reuniones para este grupo en el ciclo seleccionado. Aún no se ha realizado ninguna reunión.")
+                return
+            reuniones_dict = {f"{r['Fecha_reunion']} (Semana {r['Numero_semana']})": r['Id_reunion'] for r in reuniones}
+            reunion_sel_label = st.selectbox("Selecciona la reunión", list(reuniones_dict.keys()), key="reunion_ver_ahorros")
+            id_reunion_sel = reuniones_dict[reunion_sel_label]
+            # Obtener ahorros de la reunión seleccionada
+            cursor.execute("""
+                SELECT ah.Id_ahorro, ah.Fecha_ahorro, ah.Monto, ah.Estado, ah.Observaciones, m.nombre AS Nombre_Miembro, g.Nombre AS Nombre_Grupo, r.Numero_semana, r.Fecha_reunion, u.Nombre_Usuario AS Registrado_Por, r.Id_reunion
+                FROM Ahorros ah
+                JOIN Miembros m ON ah.Id_miembro = m.id
+                JOIN Grupos g ON ah.Id_grupo = g.Id_grupo
+                LEFT JOIN Reuniones r ON ah.Id_reunion = r.Id_reunion
+                LEFT JOIN Usuarios u ON ah.Registrado_por = u.Id_usuario
+                WHERE ah.Id_grupo = %s AND ah.Id_reunion = %s
+            """, (id_grupo_sel, id_reunion_sel))
+            ahorros = cursor.fetchall()
+            if not ahorros:
+                st.info("Aún no se han registrado ahorros para esta reunión.")
+                return
+            subdf = pd.DataFrame(ahorros)
+            st.dataframe(subdf[['Nombre_Miembro', 'Monto', 'Estado', 'Observaciones']], use_container_width=True, hide_index=True)
+            # Gráfico de barras debajo de la tabla
+            if not subdf.empty:
+                st.markdown("#### Gráfico de Barras: Ahorros por Persona en la Reunión")
+                import matplotlib.pyplot as plt
+                df_bar = subdf.groupby('Nombre_Miembro')['Monto'].sum().reset_index()
+                df_bar = df_bar.sort_values('Monto', ascending=False)
+                fig, ax = plt.subplots(figsize=(8, 4))
+                ax.bar(df_bar['Nombre_Miembro'], df_bar['Monto'], color='#4CAF50')
+                ax.set_ylabel('Ahorro en la reunión ($)')
+                ax.set_xlabel('Miembro')
+                ax.set_title('Ahorros por Persona en la Reunión')
+                plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+                st.pyplot(fig)
         else:
-            # Estadísticas
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("📊 Total Registros", len(ahorros))
-            with col2:
-                activos = [a for a in ahorros if a['Estado'] == 'Activo']
-                monto_activo = sum([a['Monto'] for a in activos])
-                st.metric("💰 Ahorros Activos", f"${monto_activo:.2f}")
-            with col3:
-                devueltos = [a for a in ahorros if a['Estado'] == 'Devuelto']
-                monto_devuelto = sum([a['Monto'] for a in devueltos])
-                st.metric("✅ Devueltos", f"${monto_devuelto:.2f}")
-            with col4:
-                total_monto = sum([a['Monto'] for a in ahorros])
-                st.metric("💵 Total General", f"${total_monto:.2f}")
-            
-            st.divider()
-            
-            # Tabla de ahorros
-            df = pd.DataFrame(ahorros)
-            df = df.rename(columns={
-                'Id_ahorro': 'ID',
-                'Fecha_ahorro': 'Fecha',
-                'Monto': 'Monto ($)',
-                'Estado': 'Estado',
-                'Nombre_Miembro': 'Miembro',
-                'Nombre_Grupo': 'Grupo',
-                'Numero_semana': 'Semana',
-                'Registrado_Por': 'Registrado Por'
-            })
-            
-            st.dataframe(
-                df[['ID', 'Fecha', 'Miembro', 'Grupo', 'Semana', 'Monto ($)', 'Estado']],
-                use_container_width=True,
-                hide_index=True
-            )
-            
-            # Detalles expandibles
-            st.divider()
-            st.write("### 📌 Detalles de Ahorros")
-            
-            for ahorro in ahorros[:20]:  # Limitar a 20 para no sobrecargar
-                estado_emoji = {'Activo': '💰', 'Devuelto': '✅'}
-                
-                with st.expander(f"{estado_emoji.get(ahorro['Estado'], '💵')} {ahorro['Nombre_Miembro']} - ${ahorro['Monto']:.2f} ({ahorro['Fecha_ahorro']})"):
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.write(f"**👤 Miembro:** {ahorro['Nombre_Miembro']}")
-                        st.write(f"**👥 Grupo:** {ahorro['Nombre_Grupo']}")
-                        st.write(f"**📅 Fecha:** {ahorro['Fecha_ahorro']}")
-                        st.write(f"**💰 Monto:** ${ahorro['Monto']:.2f}")
-                    
-                    with col2:
-                        st.write(f"**🔢 Semana:** {ahorro['Numero_semana'] or 'N/A'}")
-                        st.write(f"**📋 Reunión:** {ahorro['Fecha_reunion'] or 'N/A'}")
-                        st.write(f"**📊 Estado:** {ahorro['Estado']}")
-                        st.write(f"**👤 Registrado por:** {ahorro['Registrado_Por'] or 'Sistema'}")
-                    
-                    if ahorro['Observaciones']:
-                        st.info(f"📝 {ahorro['Observaciones']}")
-    
+            # Administradora: selectbox de grupo y luego de reunión
+            cursor.execute("SELECT Id_grupo, Nombre FROM Grupos ORDER BY Nombre")
+            grupos = cursor.fetchall()
+            if not grupos:
+                st.info("No hay grupos registrados.")
+                return
+            grupos_dict = {g['Nombre']: g['Id_grupo'] for g in grupos}
+            grupo_sel_nombre = st.selectbox("Selecciona el grupo", list(grupos_dict.keys()), key="grupo_ver_ahorros_admin")
+            id_grupo_sel = grupos_dict[grupo_sel_nombre]
+            # Obtener reuniones del grupo
+            cursor.execute("""
+                SELECT r.Id_reunion, r.Fecha_reunion, r.Numero_semana
+                FROM Reuniones r
+                WHERE r.Id_grupo = %s
+                ORDER BY r.Fecha_reunion DESC
+            """, (id_grupo_sel,))
+            reuniones = cursor.fetchall()
+            if not reuniones:
+                st.info("No hay reuniones para este grupo. Aún no se ha realizado ninguna reunión.")
+                return
+            reuniones_dict = {f"{r['Fecha_reunion']} (Semana {r['Numero_semana']})": r['Id_reunion'] for r in reuniones}
+            reunion_sel_label = st.selectbox("Selecciona la reunión", list(reuniones_dict.keys()), key="reunion_ver_ahorros_admin")
+            id_reunion_sel = reuniones_dict[reunion_sel_label]
+            # Obtener ahorros de la reunión seleccionada
+            cursor.execute("""
+                SELECT ah.Id_ahorro, ah.Fecha_ahorro, ah.Monto, ah.Estado, ah.Observaciones, m.nombre AS Nombre_Miembro, g.Nombre AS Nombre_Grupo, r.Numero_semana, r.Fecha_reunion, u.Nombre_Usuario AS Registrado_Por, r.Id_reunion
+                FROM Ahorros ah
+                JOIN Miembros m ON ah.Id_miembro = m.id
+                JOIN Grupos g ON ah.Id_grupo = g.Id_grupo
+                LEFT JOIN Reuniones r ON ah.Id_reunion = r.Id_reunion
+                LEFT JOIN Usuarios u ON ah.Registrado_por = u.Id_usuario
+                WHERE ah.Id_grupo = %s AND ah.Id_reunion = %s
+            """, (id_grupo_sel, id_reunion_sel))
+            ahorros = cursor.fetchall()
+            if not ahorros:
+                st.info("Aún no se han registrado ahorros para esta reunión.")
+                return
+            subdf = pd.DataFrame(ahorros)
+            st.dataframe(subdf[['Nombre_Miembro', 'Monto', 'Estado', 'Observaciones']], use_container_width=True, hide_index=True)
+            # Gráfico de barras debajo de la tabla
+            if not subdf.empty:
+                st.markdown("#### Gráfico de Barras: Ahorros por Persona en la Reunión")
+                import matplotlib.pyplot as plt
+                df_bar = subdf.groupby('Nombre_Miembro')['Monto'].sum().reset_index()
+                df_bar = df_bar.sort_values('Monto', ascending=False)
+                fig, ax = plt.subplots(figsize=(8, 4))
+                ax.bar(df_bar['Nombre_Miembro'], df_bar['Monto'], color='#4CAF50')
+                ax.set_ylabel('Ahorro en la reunión ($)')
+                ax.set_xlabel('Miembro')
+                ax.set_title('Ahorros por Persona en la Reunión')
+                plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+                st.pyplot(fig)
     finally:
+        conexion.close()
         conexion.close()
 
 
