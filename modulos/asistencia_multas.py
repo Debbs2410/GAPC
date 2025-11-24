@@ -130,19 +130,23 @@ def ver_reuniones(id_distrito=None, id_grupo=None):
         nombre_grupo = reunion.get('nombre_grupo') or reunion.get('Nombre') or ''
         # Obtener datos reales de asistencia para la reunión
         conexion2 = obtener_conexion()
-        cursor2 = conexion2.cursor(dictionary=True)
-        cursor2.execute('''
-            SELECT 
-                SUM(CASE WHEN Estado_asistencia = 'Presente' THEN 1 ELSE 0 END) AS Presentes,
-                SUM(CASE WHEN Estado_asistencia = 'Tardanza' THEN 1 ELSE 0 END) AS Tardanzas,
-                SUM(CASE WHEN Estado_asistencia = 'Ausente' AND Observaciones IS NULL THEN 1 ELSE 0 END) AS Ausentes_Injustificados,
-                SUM(CASE WHEN Estado_asistencia = 'Ausente' AND Observaciones IS NOT NULL THEN 1 ELSE 0 END) AS Ausentes_Justificados,
-                COUNT(*) AS Total_Asistencias
-            FROM Asistencia
-            WHERE Id_reunion = %s
-        ''', (reunion['Id_reunion'],))
-        totales = cursor2.fetchone() or {}
-        conexion2.close()
+        if not conexion2:
+            st.error("❌ Error de conexión a la base de datos para obtener totales de asistencia de la reunión.")
+            totales = {}
+        else:
+            cursor2 = conexion2.cursor(dictionary=True)
+            cursor2.execute('''
+                SELECT 
+                    SUM(CASE WHEN Estado_asistencia = 'Presente' THEN 1 ELSE 0 END) AS Presentes,
+                    SUM(CASE WHEN Estado_asistencia = 'Tardanza' THEN 1 ELSE 0 END) AS Tardanzas,
+                    SUM(CASE WHEN Estado_asistencia = 'Ausente' AND Observaciones IS NULL THEN 1 ELSE 0 END) AS Ausentes_Injustificados,
+                    SUM(CASE WHEN Estado_asistencia = 'Ausente' AND Observaciones IS NOT NULL THEN 1 ELSE 0 END) AS Ausentes_Justificados,
+                    COUNT(*) AS Total_Asistencias
+                FROM Asistencia
+                WHERE Id_reunion = %s
+            ''', (reunion['Id_reunion'],))
+            totales = cursor2.fetchone() or {}
+            conexion2.close()
         with st.expander(f"{estado_emoji.get(reunion.get('Estado'), '📋')} {nombre_grupo} - Semana {reunion.get('Numero_semana', '')} ({reunion.get('Fecha_reunion', '')})"):
             col1, col2 = st.columns(2)
             with col1:
@@ -817,16 +821,16 @@ def registrar_asistencia(id_distrito=None, id_grupo=None):
                             """, (reunion['Id_reunion'], miembro['id'], estado_db, hora_llegada, observ_db))
                             if estado == "Ausente (Injustificada)":
                                 cursor.execute("""
-                                    INSERT INTO Multas (Id_miembro, Id_grupo, Id_Ciclo, Fecha_multa, Tipo_multa, Monto, Estado_pago, Descripcion, Aplicado_por)
-                                    VALUES (%s, %s, %s, CURDATE(), 'Inasistencia', 5.00, 'Pendiente', 'Multa por inasistencia injustificada', %s)
+                                    INSERT INTO Multas (Id_miembro, Id_grupo, Id_Ciclo, Id_reunion, Fecha_multa, Tipo_multa, Monto, Estado_pago, Descripcion, Aplicado_por)
+                                    VALUES (%s, %s, %s, %s, CURDATE(), 'Inasistencia', 5.00, 'Pendiente', 'Multa por inasistencia injustificada', %s)
                                     ON DUPLICATE KEY UPDATE Estado_pago='Pendiente', Aplicado_por=VALUES(Aplicado_por)
-                                """, (miembro['id'], id_grupo, id_ciclo, id_usuario_aplica))
+                                """, (miembro['id'], id_grupo, id_ciclo, reunion['Id_reunion'], id_usuario_aplica))
                             elif estado == "Tardanza":
                                 cursor.execute("""
-                                    INSERT INTO Multas (Id_miembro, Id_grupo, Id_Ciclo, Fecha_multa, Tipo_multa, Monto, Estado_pago, Descripcion, Aplicado_por)
-                                    VALUES (%s, %s, %s, CURDATE(), 'Tardanza', 2.00, 'Pendiente', 'Multa por tardanza', %s)
+                                    INSERT INTO Multas (Id_miembro, Id_grupo, Id_Ciclo, Id_reunion, Fecha_multa, Tipo_multa, Monto, Estado_pago, Descripcion, Aplicado_por)
+                                    VALUES (%s, %s, %s, %s, CURDATE(), 'Tardanza', 2.00, 'Pendiente', 'Multa por tardanza', %s)
                                     ON DUPLICATE KEY UPDATE Estado_pago='Pendiente', Aplicado_por=VALUES(Aplicado_por)
-                                """, (miembro['id'], id_grupo, id_ciclo, id_usuario_aplica))
+                                """, (miembro['id'], id_grupo, id_ciclo, reunion['Id_reunion'], id_usuario_aplica))
                         conexion.commit()
                         st.success("Asistencia guardada y multas aplicadas.")
                         st.rerun()

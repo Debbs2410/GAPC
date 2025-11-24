@@ -111,7 +111,7 @@ def ver_todos_grupos(id_distrito=None):
                     ci.Fecha_Inicio as ciclo_inicio,
                     ci.Fecha_Fin as ciclo_fin,
                     ca.Fondo_Comun as fondo_comun,
-                    (SELECT GROUP_CONCAT(Nombre_Usuario SEPARATOR ', ') FROM Usuarios WHERE Id_grupo = g.Id_grupo AND Rol = 'Promotora') as promotora_nombre
+                    (SELECT GROUP_CONCAT(Nombre_Usuario SEPARATOR ', ') FROM Usuarios WHERE Id_distrito = g.distrito_id AND Rol = 'Promotora') as promotora_nombre
                 FROM Grupos g
                 LEFT JOIN Distrito d ON g.distrito_id = d.distrito_id
                 LEFT JOIN Ciclo ci ON g.Id_Ciclo = ci.Id_Ciclo
@@ -133,7 +133,7 @@ def ver_todos_grupos(id_distrito=None):
                     ci.Fecha_Inicio as ciclo_inicio,
                     ci.Fecha_Fin as ciclo_fin,
                     ca.Fondo_Comun as fondo_comun,
-                    (SELECT GROUP_CONCAT(Nombre_Usuario SEPARATOR ', ') FROM Usuarios WHERE Id_grupo = g.Id_grupo AND Rol = 'Promotora') as promotora_nombre
+                    (SELECT GROUP_CONCAT(Nombre_Usuario SEPARATOR ', ') FROM Usuarios WHERE Id_distrito = g.distrito_id AND Rol = 'Promotora') as promotora_nombre
                 FROM Grupos g
                 LEFT JOIN Distrito d ON g.distrito_id = d.distrito_id
                 LEFT JOIN Ciclo ci ON g.Id_Ciclo = ci.Id_Ciclo
