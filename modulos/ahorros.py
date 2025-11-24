@@ -22,8 +22,24 @@ def gestionar_ahorros(id_distrito=None, id_grupo=None):
         st.error("❌ Error de conexión a la base de datos.")
         return
     cursor = conexion.cursor(dictionary=True)
-    # Filtrar ciclos por distrito si corresponde
-    if id_distrito is not None:
+    # Restaurar filtro original para administradora y restringir solo para directiva
+    usuario = st.session_state.get('usuario', {}) if 'usuario' in st.session_state else {}
+    rol = (usuario.get('Rol') or usuario.get('rol') or '').strip().lower()
+    if rol == 'directiva' and id_grupo is not None:
+        cursor.execute("""
+            SELECT c.Id_Ciclo, c.Fecha_Inicio, c.Fecha_Fin,
+                CASE 
+                    WHEN CURDATE() < c.Fecha_Inicio THEN 'Pendiente'
+                    WHEN CURDATE() BETWEEN c.Fecha_Inicio AND c.Fecha_Fin THEN 'Activo'
+                    WHEN CURDATE() > c.Fecha_Fin THEN 'Completado'
+                END as Estado
+            FROM Ciclo c
+            INNER JOIN Grupos g ON g.Id_Ciclo = c.Id_Ciclo
+            WHERE g.Id_grupo = %s
+            ORDER BY c.Fecha_Inicio DESC
+        """, (id_grupo,))
+        ciclos = cursor.fetchall()
+    elif id_distrito is not None:
         cursor.execute("""
             SELECT DISTINCT c.Id_Ciclo, c.Fecha_Inicio, c.Fecha_Fin,
                 CASE 
@@ -36,6 +52,7 @@ def gestionar_ahorros(id_distrito=None, id_grupo=None):
             WHERE g.distrito_id = %s
             ORDER BY c.Fecha_Inicio DESC
         """, (id_distrito,))
+        ciclos = cursor.fetchall()
     else:
         cursor.execute("""
             SELECT 
@@ -50,7 +67,7 @@ def gestionar_ahorros(id_distrito=None, id_grupo=None):
             FROM Ciclo c
             ORDER BY c.Fecha_Inicio DESC
         """)
-    ciclos = cursor.fetchall()
+        ciclos = cursor.fetchall()
     if not ciclos:
         st.warning("No hay ciclos registrados.")
         return
