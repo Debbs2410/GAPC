@@ -249,7 +249,7 @@ def crear_ciclo(id_distrito=None, solo_lectura=None):
     Si se proporciona id_distrito, solo permite asignar el ciclo a grupos de ese distrito.
     """
     st.subheader("Crear Nuevo Ciclo")
-    st.info("Los ciclos tienen una duración estándar de **8 semanas (56 días)**")
+    st.info("Selecciona la duración del ciclo: 6 meses (~182 días) o 1 año (365 días)")
     
     conexion = obtener_conexion()
     if not conexion:
@@ -262,7 +262,6 @@ def crear_ciclo(id_distrito=None, solo_lectura=None):
         # Formulario de creación
         with st.form("form_crear_ciclo"):
             col1, col2 = st.columns(2)
-            
             with col1:
                 fecha_inicio = st.date_input(
                     "Fecha de Inicio*",
@@ -270,26 +269,54 @@ def crear_ciclo(id_distrito=None, solo_lectura=None):
                     help="Fecha en que inicia el ciclo",
                     disabled=solo_lectura
                 )
-                # Calcular automáticamente la fecha fin (8 semanas = 56 días)
-                fecha_fin_calculada = fecha_inicio + timedelta(days=56)
+                # Selección de duración
+                duracion_opciones = {"6 meses (~182 días)": 182, "1 año (365 días)": 365}
+                duracion_label = st.selectbox(
+                    "Duración del ciclo",
+                    list(duracion_opciones.keys()),
+                    index=0,
+                    help="Selecciona la duración del ciclo",
+                    disabled=solo_lectura
+                )
+                dias_duracion = duracion_opciones[duracion_label]
+                fecha_fin_calculada = fecha_inicio + timedelta(days=dias_duracion)
                 st.info(f"Fecha de Fin (calculada): **{fecha_fin_calculada}**")
-                st.write(f"Duración: **8 semanas (56 días)**")
+                st.write(f"Duración: **{duracion_label}**")
             with col2:
-                ahorro_inicial = st.number_input(
+                # El ahorro inicial siempre es 0 y deshabilitado para todos
+                st.number_input(
                     "Ahorro Acumulado Inicial",
                     min_value=0.0,
                     value=0.0,
                     step=0.01,
                     format="%.2f",
-                    help="Monto inicial del ciclo (usualmente $0.00)",
-                    disabled=solo_lectura
+                    help="El ahorro inicial siempre es $0.00",
+                    disabled=True
                 )
+            # Definir ahorro_inicial fijo en 0 para la inserción
+            ahorro_inicial = 0.0
             
             st.divider()
             st.write("**Asignar Grupos al Ciclo** (opcional)")
-            
-            # Obtener grupos disponibles (sin ciclo asignado o con ciclo completado)
-            if id_distrito is not None:
+            usuario = st.session_state.get('usuario', {}) if 'usuario' in st.session_state else {}
+            rol = usuario.get('Rol') or usuario.get('rol')
+            if rol == 'Directiva':
+                # Solo puede asignar su propio grupo
+                id_grupo_usuario = usuario.get('Id_grupo') or usuario.get('id_grupo')
+                cursor.execute("""
+                    SELECT g.Id_grupo, g.Nombre, g.Numero_miembros,
+                           c.Fecha_Fin,
+                           CASE 
+                               WHEN c.Fecha_Fin IS NULL THEN 'Sin ciclo'
+                               WHEN CURDATE() > c.Fecha_Fin THEN 'Ciclo completado'
+                               ELSE 'En ciclo activo'
+                           END as estado_ciclo
+                    FROM Grupos g
+                    LEFT JOIN Ciclo c ON g.Id_Ciclo = c.Id_Ciclo
+                    WHERE g.Id_grupo = %s
+                    ORDER BY g.Nombre
+                """, (id_grupo_usuario,))
+            elif id_distrito is not None:
                 cursor.execute("""
                     SELECT g.Id_grupo, g.Nombre, g.Numero_miembros,
                            c.Fecha_Fin,
@@ -317,31 +344,37 @@ def crear_ciclo(id_distrito=None, solo_lectura=None):
                     ORDER BY g.Nombre
                 """)
             grupos = cursor.fetchall()
-            
-            # Filtrar grupos disponibles
             grupos_disponibles = [g for g in grupos if g['estado_ciclo'] in ['Sin ciclo', 'Ciclo completado']]
             grupos_no_disponibles = [g for g in grupos if g['estado_ciclo'] == 'En ciclo activo']
-            
-            if grupos_disponibles:
-                grupos_dict = {
-                    f"{g['Nombre']} (ID: {g['Id_grupo']}, {g['Numero_miembros']} miembros)": g['Id_grupo'] 
-                    for g in grupos_disponibles
-                }
-                grupos_seleccionados = st.multiselect(
-                    "Selecciona grupos para asignar al ciclo",
-                    list(grupos_dict.keys()),
-                    help="Solo se muestran grupos sin ciclo activo",
-                    disabled=solo_lectura
-                )
-                ids_grupos = [grupos_dict[g] for g in grupos_seleccionados]
+            if rol == 'Directiva':
+                # Solo puede seleccionar su propio grupo si está disponible
+                if grupos_disponibles:
+                    g = grupos_disponibles[0]
+                    st.info(f"Solo puedes asignar tu grupo: {g['Nombre']} (ID: {g['Id_grupo']}, {g['Numero_miembros']} miembros)")
+                    ids_grupos = [g['Id_grupo']]
+                else:
+                    st.warning("Tu grupo ya está en un ciclo activo y no puede ser asignado.")
+                    ids_grupos = []
             else:
-                st.warning("No hay grupos disponibles. Todos los grupos están en ciclos activos.")
-                ids_grupos = []
-            
-            if grupos_no_disponibles:
-                with st.expander("Grupos NO disponibles (en ciclo activo)"):
-                    for g in grupos_no_disponibles:
-                        st.write(f"- {g['Nombre']} (finaliza: {g['Fecha_Fin']})")
+                if grupos_disponibles:
+                    grupos_dict = {
+                        f"{g['Nombre']} (ID: {g['Id_grupo']}, {g['Numero_miembros']} miembros)": g['Id_grupo'] 
+                        for g in grupos_disponibles
+                    }
+                    grupos_seleccionados = st.multiselect(
+                        "Selecciona grupos para asignar al ciclo",
+                        list(grupos_dict.keys()),
+                        help="Solo se muestran grupos sin ciclo activo",
+                        disabled=solo_lectura
+                    )
+                    ids_grupos = [grupos_dict[g] for g in grupos_seleccionados]
+                else:
+                    st.warning("No hay grupos disponibles. Todos los grupos están en ciclos activos.")
+                    ids_grupos = []
+                if grupos_no_disponibles:
+                    with st.expander("Grupos NO disponibles (en ciclo activo)"):
+                        for g in grupos_no_disponibles:
+                            st.write(f"- {g['Nombre']} (finaliza: {g['Fecha_Fin']})")
             
             submitted = st.form_submit_button("Crear Ciclo", type="primary", disabled=solo_lectura)
             
@@ -393,7 +426,7 @@ def crear_ciclo(id_distrito=None, solo_lectura=None):
                     
                     conexion.commit()
                     st.success(f"Ciclo creado exitosamente con ID {id_ciclo_nuevo}!")
-                    st.success(f"Duración: {fecha_inicio} al {fecha_fin_calculada} (8 semanas)")
+                    st.success(f"Duración: {fecha_inicio} al {fecha_fin_calculada} ({duracion_label})")
                     
                     if ids_grupos:
                         st.info(f"{len(ids_grupos)} grupo(s) asignado(s) al ciclo.")
@@ -598,16 +631,34 @@ def gestionar_estado_ciclos(id_distrito=None, id_grupo=None, solo_lectura=False)
                 # Validar préstamos pendientes según el contexto
                 prestamos_pendientes = 0
                 prestamos_detalle = []
+                multas_pendientes = 0
+                multas_detalle = []
                 if id_grupo is not None:
                     # Solo para el grupo propio (directiva)
+                    # Préstamos pendientes
                     cursor.execute("""
                         SELECT COUNT(*) as pendientes FROM Prestamos p
                         INNER JOIN Grupos g ON p.Id_grupo = g.Id_grupo
                         WHERE g.Id_grupo = %s AND p.Estado IN ('Pendiente', 'Vencido')
                     """, (id_grupo,))
                     prestamos_pendientes = cursor.fetchone()['pendientes']
+                    # Multas pendientes
+                    cursor.execute("""
+                        SELECT COUNT(*) as pendientes FROM Multas m
+                        WHERE m.Id_grupo = %s AND m.Estado_pago = 'Pendiente'
+                    """, (id_grupo,))
+                    multas_pendientes = cursor.fetchone()['pendientes']
+                    if multas_pendientes > 0:
+                        # Detalle de multas
+                        cursor.execute("""
+                            SELECT m.nombre AS miembro, mu.Monto, mu.Tipo_multa FROM Multas mu
+                            JOIN Miembros m ON mu.Id_miembro = m.id
+                            WHERE mu.Id_grupo = %s AND mu.Estado_pago = 'Pendiente'
+                        """, (id_grupo,))
+                        multas_detalle = [f"{row['miembro']}: ${row['Monto']} ({row['Tipo_multa']})" for row in cursor.fetchall()]
                 else:
                     # Para todos los grupos asociados al ciclo (promotora, administradora)
+                    # Préstamos pendientes
                     cursor.execute("""
                         SELECT g.Nombre, COUNT(p.Id_prestamo) as pendientes
                         FROM Grupos g
@@ -618,12 +669,31 @@ def gestionar_estado_ciclos(id_distrito=None, id_grupo=None, solo_lectura=False)
                     prestamos_grupos = cursor.fetchall()
                     prestamos_pendientes = sum(g['pendientes'] for g in prestamos_grupos)
                     prestamos_detalle = [f"{g['Nombre']}: {g['pendientes']} préstamo(s) pendiente(s)" for g in prestamos_grupos if g['pendientes'] > 0]
-                if prestamos_pendientes > 0:
-                    st.error(f"No se puede finalizar el ciclo: hay {prestamos_pendientes} préstamo(s) pendiente(s) de pago en el/los grupo(s).")
-                    if prestamos_detalle:
-                        st.warning("Detalle de préstamos pendientes:")
-                        for detalle in prestamos_detalle:
-                            st.write(f"- {detalle}")
+                    # Multas pendientes
+                    cursor.execute("""
+                        SELECT g.Nombre, COUNT(mu.Id_multa) as pendientes
+                        FROM Grupos g
+                        LEFT JOIN Multas mu ON mu.Id_grupo = g.Id_grupo AND mu.Estado_pago = 'Pendiente'
+                        WHERE g.Id_Ciclo = %s
+                        GROUP BY g.Id_grupo
+                    """, (id_ciclo,))
+                    multas_grupos = cursor.fetchall()
+                    multas_pendientes = sum(g['pendientes'] for g in multas_grupos)
+                    multas_detalle = [f"{g['Nombre']}: {g['pendientes']} multa(s) pendiente(s)" for g in multas_grupos if g['pendientes'] > 0]
+                # Mostrar errores si hay préstamos o multas pendientes
+                if prestamos_pendientes > 0 or multas_pendientes > 0:
+                    if prestamos_pendientes > 0:
+                        st.error(f"No se puede finalizar el ciclo: hay {prestamos_pendientes} préstamo(s) pendiente(s) de pago en el/los grupo(s).")
+                        if prestamos_detalle:
+                            st.warning("Detalle de préstamos pendientes:")
+                            for detalle in prestamos_detalle:
+                                st.write(f"- {detalle}")
+                    if multas_pendientes > 0:
+                        st.error(f"No se puede finalizar el ciclo: hay {multas_pendientes} multa(s) pendiente(s) de pago en el/los grupo(s).")
+                        if multas_detalle:
+                            st.warning("Detalle de multas pendientes:")
+                            for detalle in multas_detalle:
+                                st.write(f"- {detalle}")
                 elif st.button("🏁 Finalizar Ciclo Ahora", type="secondary", disabled=not confirmar or solo_lectura):
                     try:
                         # Actualizar fecha fin a hoy
