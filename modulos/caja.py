@@ -1,5 +1,32 @@
 import pandas as pd
 
+def registrar_mora_en_caja(id_grupo, monto_mora, fecha, usuario_id, observaciones=None):
+    """
+    Registra la mora como ingreso en la caja del grupo para su posterior reparto.
+    """
+    from modulos.config.conexion import obtener_conexion
+    conexion = obtener_conexion()
+    if not conexion:
+        return False
+    cursor = conexion.cursor()
+    try:
+        cursor.execute(
+            """
+            INSERT INTO Caja_Movimientos (Id_grupo, Tipo, Monto, Fecha, Registrado_por, Observaciones)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (id_grupo, 'Mora', monto_mora, fecha, usuario_id, observaciones)
+        )
+        conexion.commit()
+        return True
+    except Exception as e:
+        conexion.rollback()
+        print(f"Error al registrar mora en caja: {e}")
+        return False
+    finally:
+        cursor.close()
+        conexion.close()
+
 def obtener_datos_caja(id_grupo):
     from modulos.config.conexion import obtener_conexion
     conexion = obtener_conexion()
@@ -101,12 +128,11 @@ def gestionar_caja(id_distrito=None, id_grupo=None):
                 WHERE p.Id_grupo = %s
             """, (grupo_id,))
             total_intereses = cursor.fetchone()['total_intereses'] or 0
-            # Total mora recaudada
+            # Total mora recaudada (ahora desde Caja_Movimientos)
             cursor.execute("""
-                SELECT COALESCE(SUM(pp.Monto_pagado - LEAST(pp.Monto_pagado, (p.Monto_total - COALESCE((SELECT SUM(Monto_pagado) FROM Pagos_Prestamos WHERE Id_prestamo = p.Id_prestamo AND Id_pago < pp.Id_pago), 0)))), 0) as total_mora
-                FROM Pagos_Prestamos pp
-                INNER JOIN Prestamos p ON pp.Id_prestamo = p.Id_prestamo
-                WHERE p.Id_grupo = %s
+                SELECT COALESCE(SUM(Monto), 0) as total_mora
+                FROM Caja_Movimientos
+                WHERE Id_grupo = %s AND Tipo = 'Mora'
             """, (grupo_id,))
             total_mora = cursor.fetchone()['total_mora'] or 0
             # Calcular préstamos activos (capital no pagado)

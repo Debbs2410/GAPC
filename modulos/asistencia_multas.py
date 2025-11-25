@@ -271,6 +271,8 @@ def gestionar_reuniones(id_distrito=None, id_grupo=None):
             'Cancelada': '❌'
         }
         nombre_grupo = reunion.get('nombre_grupo') or reunion.get('Nombre') or ''
+        # Mostrar la información en expanders solo abajo, como al inicio
+        st.write("")
         with st.expander(f"{estado_emoji.get(reunion.get('Estado'), '📋')} {nombre_grupo} - Semana {reunion.get('Numero_semana', '')} ({reunion.get('Fecha_reunion', '')})"):
             col1, col2 = st.columns(2)
             with col1:
@@ -284,7 +286,6 @@ def gestionar_reuniones(id_distrito=None, id_grupo=None):
                 st.write(f"**📊 Estado:** {reunion.get('Estado', '')}")
             # Mostrar resumen de asistencias solo para reuniones realizadas
             if reunion.get('Estado') == 'Realizada':
-                # Consultar totales de asistencia para la reunión
                 conexion2 = obtener_conexion()
                 cursor2 = conexion2.cursor(dictionary=True)
                 cursor2.execute('''

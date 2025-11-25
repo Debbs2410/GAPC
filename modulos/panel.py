@@ -97,7 +97,33 @@ def mostrar_panel():
         elif opcion == "Ciclos":
             gestionar_ciclos()
         elif opcion == "Asistencia y Multas":
-            gestionar_asistencia_multas()
+            # Selectores de distrito y grupo para filtrar asistencias
+            from modulos.config.conexion import obtener_conexion
+            conexion = obtener_conexion()
+            cursor = conexion.cursor(dictionary=True)
+            # Selector de distrito
+            cursor.execute("SELECT distrito_id, nombre_distrito FROM Distrito ORDER BY nombre_distrito")
+            distritos = cursor.fetchall()
+            distrito_opciones = {d['nombre_distrito']: d['distrito_id'] for d in distritos}
+            nombre_distrito_sel = st.selectbox("Filtrar por Distrito", ["Todos"] + list(distrito_opciones.keys()))
+            id_distrito_sel = distrito_opciones.get(nombre_distrito_sel) if nombre_distrito_sel != "Todos" else None
+
+            # Selector de grupo (opcional, depende del distrito seleccionado)
+            grupos = []
+            if id_distrito_sel:
+                cursor.execute("SELECT Id_grupo, Nombre FROM Grupos WHERE distrito_id = %s ORDER BY Nombre", (id_distrito_sel,))
+                grupos = cursor.fetchall()
+            else:
+                cursor.execute("SELECT Id_grupo, Nombre FROM Grupos ORDER BY Nombre")
+                grupos = cursor.fetchall()
+            grupo_opciones = {g['Nombre']: g['Id_grupo'] for g in grupos}
+            nombre_grupo_sel = st.selectbox("Filtrar por Grupo", ["Todos"] + list(grupo_opciones.keys()))
+            id_grupo_sel = grupo_opciones.get(nombre_grupo_sel) if nombre_grupo_sel != "Todos" else None
+
+            cursor.close()
+            conexion.close()
+
+            gestionar_asistencia_multas(id_distrito=id_distrito_sel, id_grupo=id_grupo_sel)
         elif opcion == "Ahorros":
             gestionar_ahorros()
         elif opcion == "Préstamos":
@@ -109,8 +135,34 @@ def mostrar_panel():
             from modulos.rifas import gestionar_rifas
             gestionar_rifas()
         elif opcion == "Ver reportes":
+            # Selectores de distrito y grupo para filtrar reportes
+            from modulos.config.conexion import obtener_conexion
+            conexion = obtener_conexion()
+            cursor = conexion.cursor(dictionary=True)
+            # Selector de distrito
+            cursor.execute("SELECT distrito_id, nombre_distrito FROM Distrito ORDER BY nombre_distrito")
+            distritos = cursor.fetchall()
+            distrito_opciones = {d['nombre_distrito']: d['distrito_id'] for d in distritos}
+            nombre_distrito_sel = st.selectbox("Filtrar por Distrito", ["Todos"] + list(distrito_opciones.keys()), key="reporte_distrito")
+            id_distrito_sel = distrito_opciones.get(nombre_distrito_sel) if nombre_distrito_sel != "Todos" else None
+
+            # Selector de grupo (opcional, depende del distrito seleccionado)
+            grupos = []
+            if id_distrito_sel:
+                cursor.execute("SELECT Id_grupo, Nombre FROM Grupos WHERE distrito_id = %s ORDER BY Nombre", (id_distrito_sel,))
+                grupos = cursor.fetchall()
+            else:
+                cursor.execute("SELECT Id_grupo, Nombre FROM Grupos ORDER BY Nombre")
+                grupos = cursor.fetchall()
+            grupo_opciones = {g['Nombre']: g['Id_grupo'] for g in grupos}
+            nombre_grupo_sel = st.selectbox("Filtrar por Grupo", ["Todos"] + list(grupo_opciones.keys()), key="reporte_grupo")
+            id_grupo_sel = grupo_opciones.get(nombre_grupo_sel) if nombre_grupo_sel != "Todos" else None
+
+            cursor.close()
+            conexion.close()
+
             from modulos.reportes import generar_reporte_ciclo
-            generar_reporte_ciclo()
+            generar_reporte_ciclo(id_distrito=id_distrito_sel, id_grupo=id_grupo_sel)
         elif opcion == "Configuraciones":
             from modulos.configuracion import mostrar_configuraciones
             mostrar_configuraciones()

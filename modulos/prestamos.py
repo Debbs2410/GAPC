@@ -774,6 +774,11 @@ def registrar_pago_prestamo(id_distrito=None, id_grupo=None, solo_lectura=False)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """, (id_prestamo, numero_cuota, monto_pago, fecha_pago, metodo_pago, observaciones, usuario_id))
 
+                # Si hay mora, registrar en caja
+                if mora > 0:
+                    from modulos.caja import registrar_mora_en_caja
+                    registrar_mora_en_caja(prestamo['Id_grupo'], mora, fecha_pago, usuario_id, f"Mora por pago de préstamo ID {id_prestamo}, cuota {numero_cuota}")
+
                 # Actualizar estado del préstamo si está completamente pagado
                 if nuevo_saldo == 0:
                     cursor.execute("""
